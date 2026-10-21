@@ -323,6 +323,9 @@ class ReceiptService:
         for l in extracted_copy.get("lines", []):
             if "id" not in l:
                 l["id"] = str(uuid.uuid4())
+        for t in extracted_copy.get("tax_lines", []):
+            if "id" not in t:
+                t["id"] = str(uuid.uuid4())
         _RECEIPTS_STORE[str(receipt_id)] = extracted_copy
 
         return receipt
@@ -335,13 +338,180 @@ class ReceiptService:
         return receipts
 
     @staticmethod
+    async def get_all_receipts_from_db(db: AsyncSession) -> List[Dict]:
+        """Queries all receipts from database with line counts, falling back to samples if empty."""
+        stmt = (
+            select(Receipt)
+            .options(selectinload(Receipt.lines))
+            .order_by(Receipt.purchase_datetime.desc())
+        )
+        res = await db.execute(stmt)
+        receipts = res.scalars().all()
+        if not receipts:
+            await ReceiptService.sync_sample_receipts_to_db(db)
+            res = await db.execute(stmt)
+            receipts = res.scalars().all()
+
+        if not receipts:
+            return ReceiptService.get_all_receipts()
+
+        result = []
+        for r in receipts:
+            result.append({
+                "id": str(r.id),
+                "household_id": str(r.household_id),
+                "company_name": r.company_name,
+                "company_cif": r.company_cif,
+                "store_address": r.store_address,
+                "store_city": r.store_city,
+                "store_postal_code": r.store_postal_code,
+                "invoice_number": r.invoice_number,
+                "store_code": r.store_code,
+                "purchase_datetime": r.purchase_datetime.isoformat() if r.purchase_datetime else "",
+                "purchase_date": r.purchase_date.isoformat() if r.purchase_date else "",
+                "total_amount": float(r.total_amount),
+                "payment_method": r.payment_method,
+                "card_last_four": r.card_last_four,
+                "status": r.status,
+                "extraction_warnings": r.extraction_warnings or [],
+                "is_manual_override": r.is_manual_override,
+                "lines_count": len(r.lines),
+                "created_at": r.created_at.isoformat() if r.created_at else (r.purchase_datetime.isoformat() if r.purchase_datetime else ""),
+            })
+        return result
+
+    @staticmethod
     def get_receipt_by_id(receipt_id: str) -> Optional[Dict]:
         load_initial_samples_if_empty()
-        return _RECEIPTS_STORE.get(receipt_id)
+        receipt = _RECEIPTS_STORE.get(receipt_id)
+        if receipt:
+            for l in receipt.get("lines", []):
+                if "id" not in l:
+                    l["id"] = str(uuid.uuid4())
+            for t in receipt.get("tax_lines", []):
+                if "id" not in t:
+                    t["id"] = str(uuid.uuid4())
+        return receipt
+
+    @staticmethod
+    async def get_receipt_detail(db: AsyncSession, receipt_id: str) -> Optional[Dict]:
+        """Loads complete receipt detail with lines, canonical product names, categories, and tax lines."""
+        try:
+            r_uuid = uuid.UUID(receipt_id)
+        except ValueError:
+            r_uuid = None
+
+        if r_uuid:
+            stmt = (
+                select(Receipt)
+                .options(
+                    selectinload(Receipt.lines).selectinload(ReceiptLine.product).selectinload(Product.category),
+                    selectinload(Receipt.tax_lines),
+                )
+                .where(Receipt.id == r_uuid)
+            )
+            res = await db.execute(stmt)
+            receipt = res.scalar_one_or_none()
+            if receipt:
+                lines = []
+                for l in receipt.lines:
+                    prod_name = l.product.canonical_name if l.product else l.raw_description
+                    cat_name = l.product.category.name if (l.product and l.product.category) else "Otros"
+                    lines.append({
+                        "id": str(l.id),
+                        "line_order": l.line_order,
+                        "raw_description": l.raw_description,
+                        "product_id": str(l.product_id) if l.product_id else None,
+                        "product_name": prod_name,
+                        "category_name": cat_name,
+                        "quantity": float(l.quantity),
+                        "unit_of_measure": l.unit_of_measure,
+                        "unit_price": float(l.unit_price),
+                        "discount_amount": float(l.discount_amount),
+                        "line_total": float(l.line_total),
+                        "is_weighed_item": l.is_weighed_item,
+                        "weight_in_kg": float(l.weight_in_kg) if l.weight_in_kg is not None else None,
+                        "validation_status": l.validation_status,
+                        "is_manual_override": l.is_manual_override,
+                    })
+
+                taxes = []
+                for t in receipt.tax_lines:
+                    taxes.append({
+                        "id": str(t.id),
+                        "tax_rate_percent": float(t.tax_rate_percent),
+                        "taxable_base": float(t.taxable_base),
+                        "tax_amount": float(t.tax_amount),
+                        "total_with_tax": float(t.total_with_tax),
+                    })
+
+                return {
+                    "id": str(receipt.id),
+                    "household_id": str(receipt.household_id),
+                    "company_name": receipt.company_name,
+                    "company_cif": receipt.company_cif,
+                    "store_address": receipt.store_address,
+                    "store_city": receipt.store_city,
+                    "store_postal_code": receipt.store_postal_code,
+                    "invoice_number": receipt.invoice_number,
+                    "store_code": receipt.store_code,
+                    "purchase_datetime": receipt.purchase_datetime.isoformat() if receipt.purchase_datetime else "",
+                    "purchase_date": receipt.purchase_date.isoformat() if receipt.purchase_date else "",
+                    "total_amount": float(receipt.total_amount),
+                    "payment_method": receipt.payment_method,
+                    "card_last_four": receipt.card_last_four,
+                    "status": receipt.status,
+                    "extraction_warnings": receipt.extraction_warnings or [],
+                    "is_manual_override": receipt.is_manual_override,
+                    "lines_count": len(lines),
+                    "created_at": receipt.created_at.isoformat() if receipt.created_at else (receipt.purchase_datetime.isoformat() if receipt.purchase_datetime else ""),
+                    "lines": lines,
+                    "tax_lines": taxes,
+                }
+
+        # Fallback to in-memory store
+        return ReceiptService.get_receipt_by_id(receipt_id)
+
+    @staticmethod
+    async def update_receipt_in_db(db: AsyncSession, receipt_id: str, updates: Dict[str, Any]) -> Optional[Dict]:
+        """Manually updates receipt metadata in DB, setting is_manual_override=True."""
+        try:
+            r_uuid = uuid.UUID(receipt_id)
+        except ValueError:
+            r_uuid = None
+
+        if r_uuid:
+            stmt = select(Receipt).where(Receipt.id == r_uuid)
+            res = await db.execute(stmt)
+            receipt = res.scalar_one_or_none()
+            if receipt:
+                if "store_address" in updates and updates["store_address"] is not None:
+                    receipt.store_address = updates["store_address"]
+                if "store_city" in updates and updates["store_city"] is not None:
+                    receipt.store_city = updates["store_city"]
+                if "store_postal_code" in updates and updates["store_postal_code"] is not None:
+                    receipt.store_postal_code = updates["store_postal_code"]
+                if "purchase_date" in updates and updates["purchase_date"] is not None:
+                    try:
+                        receipt.purchase_date = date.fromisoformat(updates["purchase_date"])
+                    except Exception:
+                        pass
+                if "total_amount" in updates and updates["total_amount"] is not None:
+                    receipt.total_amount = updates["total_amount"]
+                if "payment_method" in updates and updates["payment_method"] is not None:
+                    receipt.payment_method = updates["payment_method"]
+                if "status" in updates and updates["status"] is not None:
+                    receipt.status = updates["status"]
+
+                receipt.is_manual_override = True
+                await db.commit()
+                return await ReceiptService.get_receipt_detail(db, receipt_id)
+
+        return ReceiptService.update_receipt(receipt_id, updates)
 
     @staticmethod
     def update_receipt(receipt_id: str, updates: Dict[str, Any]) -> Optional[Dict]:
-        """Manually updates receipt metadata, setting is_manual_override=True."""
+        """Manually updates receipt metadata in memory, setting is_manual_override=True."""
         load_initial_samples_if_empty()
         receipt = _RECEIPTS_STORE.get(receipt_id)
         if not receipt:
@@ -355,8 +525,82 @@ class ReceiptService:
         return receipt
 
     @staticmethod
+    async def update_receipt_line_in_db(
+        db: AsyncSession,
+        receipt_id: str,
+        line_id: str,
+        updates: Dict[str, Any],
+    ) -> Optional[Dict]:
+        """Manually updates a specific receipt line in DB, recalculates total and marks overrides."""
+        try:
+            l_uuid = uuid.UUID(line_id)
+            r_uuid = uuid.UUID(receipt_id)
+        except ValueError:
+            l_uuid = None
+            r_uuid = None
+
+        if l_uuid and r_uuid:
+            stmt = (
+                select(ReceiptLine)
+                .options(selectinload(ReceiptLine.product).selectinload(Product.category))
+                .where(ReceiptLine.id == l_uuid, ReceiptLine.receipt_id == r_uuid)
+            )
+            res = await db.execute(stmt)
+            line = res.scalar_one_or_none()
+            if line:
+                if "raw_description" in updates and updates["raw_description"] is not None:
+                    line.raw_description = updates["raw_description"]
+                if "quantity" in updates and updates["quantity"] is not None:
+                    line.quantity = updates["quantity"]
+                if "unit_of_measure" in updates and updates["unit_of_measure"] is not None:
+                    line.unit_of_measure = updates["unit_of_measure"]
+                if "unit_price" in updates and updates["unit_price"] is not None:
+                    line.unit_price = updates["unit_price"]
+                if "discount_amount" in updates and updates["discount_amount"] is not None:
+                    line.discount_amount = updates["discount_amount"]
+                if "line_total" in updates and updates["line_total"] is not None:
+                    line.line_total = updates["line_total"]
+
+                line.is_manual_override = True
+                line.validation_status = "MANUALLY_EDITED"
+
+                # Recalculate receipt total
+                r_stmt = select(Receipt).options(selectinload(Receipt.lines)).where(Receipt.id == r_uuid)
+                r_res = await db.execute(r_stmt)
+                receipt = r_res.scalar_one_or_none()
+                if receipt:
+                    receipt.is_manual_override = True
+                    new_total = sum(float(l.line_total) for l in receipt.lines)
+                    receipt.total_amount = round(new_total, 2)
+
+                await db.commit()
+
+                prod_name = line.product.canonical_name if line.product else line.raw_description
+                cat_name = line.product.category.name if (line.product and line.product.category) else "Otros"
+
+                return {
+                    "id": str(line.id),
+                    "line_order": line.line_order,
+                    "raw_description": line.raw_description,
+                    "product_id": str(line.product_id) if line.product_id else None,
+                    "product_name": prod_name,
+                    "category_name": cat_name,
+                    "quantity": float(line.quantity),
+                    "unit_of_measure": line.unit_of_measure,
+                    "unit_price": float(line.unit_price),
+                    "discount_amount": float(line.discount_amount),
+                    "line_total": float(line.line_total),
+                    "is_weighed_item": line.is_weighed_item,
+                    "weight_in_kg": float(line.weight_in_kg) if line.weight_in_kg is not None else None,
+                    "validation_status": line.validation_status,
+                    "is_manual_override": line.is_manual_override,
+                }
+
+        return ReceiptService.update_receipt_line(receipt_id, line_id, updates)
+
+    @staticmethod
     def update_receipt_line(receipt_id: str, line_id: str, updates: Dict[str, Any]) -> Optional[Dict]:
-        """Manually updates a specific receipt line, protecting it from auto-overwrite."""
+        """Manually updates a specific receipt line in memory, protecting it from auto-overwrite."""
         load_initial_samples_if_empty()
         receipt = _RECEIPTS_STORE.get(receipt_id)
         if not receipt:
@@ -386,7 +630,7 @@ class ReceiptService:
         return target_line
 
     @staticmethod
-    def process_and_save_pdf(stream, filename: str) -> Dict:
+    async def process_and_save_pdf(stream, filename: str, db: Optional[AsyncSession] = None) -> Dict:
         extracted = PDFReceiptExtractor.extract_from_stream(stream)
         receipt_id = str(uuid.uuid4())
         extracted["id"] = receipt_id
@@ -400,7 +644,46 @@ class ReceiptService:
             tax["id"] = str(uuid.uuid4())
 
         _RECEIPTS_STORE[receipt_id] = extracted
+
+        if db:
+            hh_stmt = select(Household).limit(1)
+            hh_res = await db.execute(hh_stmt)
+            household = hh_res.scalar_one_or_none()
+            if household:
+                await ReceiptService.save_extracted_receipt_to_db(
+                    db=db,
+                    extracted=extracted,
+                    household_id=household.id,
+                )
+
         return extracted
+
+    @staticmethod
+    async def get_analytics_summary_from_db(db: AsyncSession) -> Dict:
+        """Calculates aggregated KPIs directly from database receipts."""
+        receipts = await ReceiptService.get_all_receipts_from_db(db)
+        if not receipts:
+            return ReceiptService.get_analytics_summary()
+
+        total_spend = sum(r["total_amount"] for r in receipts)
+        count = len(receipts)
+        avg = round(total_spend / count, 2) if count > 0 else 0.0
+
+        sorted_totals = sorted(r["total_amount"] for r in receipts)
+        median = sorted_totals[count // 2] if count > 0 else 0.0
+
+        last_date = receipts[0].get("purchase_date") if receipts else None
+
+        return {
+            "total_spend": round(total_spend, 2),
+            "previous_spend": 0.0,
+            "spend_variation_pct": 0.0,
+            "receipt_count": count,
+            "average_ticket": avg,
+            "median_ticket": round(median, 2),
+            "last_purchase_date": last_date,
+            "last_sync_at": "Sincronizado vía Gmail / PDF",
+        }
 
     @staticmethod
     def get_analytics_summary() -> Dict:
@@ -438,6 +721,51 @@ class ReceiptService:
         }
 
     @staticmethod
+    async def get_category_distribution_from_db(db: AsyncSession) -> List[Dict]:
+        """Calculates spend breakdown grouped by product category from database."""
+        stmt = (
+            select(ReceiptLine)
+            .options(selectinload(ReceiptLine.product).selectinload(Product.category))
+        )
+        res = await db.execute(stmt)
+        lines = res.scalars().all()
+        if not lines:
+            return ReceiptService.get_category_distribution()
+
+        category_totals: Dict[str, float] = {}
+        for line in lines:
+            cat = line.product.category.name if (line.product and line.product.category) else "Otros"
+            category_totals[cat] = category_totals.get(cat, 0.0) + float(line.line_total)
+
+        total_all = sum(category_totals.values()) or 1.0
+
+        colors = {
+            "Frutas y Verduras": "#10B981",
+            "Carnicería y Aves": "#EF4444",
+            "Pescadería": "#06B6D4",
+            "Lácteos y Quesos": "#F59E0B",
+            "Platos Preparados": "#8B5CF6",
+            "Bebidas": "#3B82F6",
+            "Cuidado Personal": "#EC4899",
+            "Aperitivos y Snacks": "#F97316",
+            "Alimentación General": "#6B7280",
+            "Servicios": "#9CA3AF",
+            "Otros": "#64748B",
+        }
+
+        distribution = []
+        for cat, amount in sorted(category_totals.items(), key=lambda x: x[1], reverse=True):
+            pct = round((amount / total_all) * 100, 1)
+            distribution.append({
+                "category_name": cat,
+                "color_hex": colors.get(cat, "#10B981"),
+                "total_spend": round(amount, 2),
+                "percentage": pct,
+            })
+
+        return distribution
+
+    @staticmethod
     def get_category_distribution() -> List[Dict]:
         receipts = ReceiptService.get_all_receipts()
         category_totals: Dict[str, float] = {}
@@ -460,6 +788,7 @@ class ReceiptService:
             "Aperitivos y Snacks": "#F97316",
             "Alimentación General": "#6B7280",
             "Servicios": "#9CA3AF",
+            "Otros": "#64748B",
         }
 
         distribution = []
@@ -473,6 +802,28 @@ class ReceiptService:
             })
 
         return distribution
+
+    @staticmethod
+    async def get_spending_evolution_from_db(db: AsyncSession) -> List[Dict]:
+        """Calculates daily spend time series directly from database."""
+        receipts = await ReceiptService.get_all_receipts_from_db(db)
+        if not receipts:
+            return ReceiptService.get_spending_evolution()
+
+        by_date: Dict[str, Dict] = {}
+        for r in receipts:
+            d = r.get("purchase_date", "")
+            if d:
+                if d not in by_date:
+                    by_date[d] = {"date": d, "total_amount": 0.0, "receipt_count": 0}
+                by_date[d]["total_amount"] += r.get("total_amount", 0.0)
+                by_date[d]["receipt_count"] += 1
+
+        points = list(by_date.values())
+        points.sort(key=lambda p: p["date"])
+        for p in points:
+            p["total_amount"] = round(p["total_amount"], 2)
+        return points
 
     @staticmethod
     def get_spending_evolution() -> List[Dict]:

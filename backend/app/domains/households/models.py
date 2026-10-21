@@ -87,7 +87,7 @@ class HouseholdMembership(Base):
 
     # Relationships
     household: Mapped["Household"] = relationship("Household", back_populates="memberships")
-    user: Mapped["app.domains.auth.models.User"] = relationship("app.domains.auth.models.User", back_populates="memberships")
+    user: Mapped["User"] = relationship("User", back_populates="memberships")
 
 
 class HouseholdInvitation(Base):

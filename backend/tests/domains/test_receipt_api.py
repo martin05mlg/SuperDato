@@ -27,10 +27,32 @@ async def test_get_receipt_detail(client: AsyncClient):
     detail = detail_res.json()
     assert len(detail["lines"]) > 0
     assert len(detail["tax_lines"]) > 0
+    assert detail["lines"][0]["product_name"] is not None
+    assert detail["lines"][0]["category_name"] is not None
+    assert detail["tax_lines"][0]["id"] is not None
     # Check that weighed items have weight_in_kg
     weighed_lines = [l for l in detail["lines"] if l["is_weighed_item"]]
     assert len(weighed_lines) > 0
     assert weighed_lines[0]["unit_of_measure"] == "kg"
+
+
+@pytest.mark.asyncio
+async def test_update_receipt_line_via_api(client: AsyncClient):
+    list_res = await client.get("/api/v1/receipts")
+    receipt_id = list_res.json()[0]["id"]
+
+    detail_res = await client.get(f"/api/v1/receipts/{receipt_id}")
+    line_id = detail_res.json()["lines"][0]["id"]
+
+    patch_res = await client.patch(
+        f"/api/v1/receipts/{receipt_id}/lines/{line_id}",
+        json={"unit_price": 12.50, "line_total": 12.50},
+    )
+    assert patch_res.status_code == 200
+    patched_line = patch_res.json()
+    assert patched_line["unit_price"] == 12.50
+    assert patched_line["is_manual_override"] is True
+    assert patched_line["validation_status"] == "MANUALLY_EDITED"
 
 
 @pytest.mark.asyncio

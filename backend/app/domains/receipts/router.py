@@ -18,18 +18,13 @@ router = APIRouter(prefix="/receipts", tags=["Receipts"])
 @router.get("", response_model=List[ReceiptResponse])
 async def list_receipts(db: AsyncSession = Depends(get_db)):
     """Returns the list of all imported Mercadona digital receipts."""
-    # Proactively sync samples to DB if needed
-    try:
-        await ReceiptService.sync_sample_receipts_to_db(db)
-    except Exception:
-        pass
-    return ReceiptService.get_all_receipts()
+    return await ReceiptService.get_all_receipts_from_db(db)
 
 
 @router.get("/{receipt_id}", response_model=ReceiptDetailResponse)
-async def get_receipt_detail(receipt_id: str):
+async def get_receipt_detail(receipt_id: str, db: AsyncSession = Depends(get_db)):
     """Returns detailed information of a receipt including all line items and tax breakdown."""
-    receipt = ReceiptService.get_receipt_by_id(receipt_id)
+    receipt = await ReceiptService.get_receipt_detail(db, receipt_id)
     if not receipt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -39,12 +34,12 @@ async def get_receipt_detail(receipt_id: str):
 
 
 @router.patch("/{receipt_id}", response_model=ReceiptDetailResponse)
-async def update_receipt(receipt_id: str, data: ReceiptUpdate):
+async def update_receipt(receipt_id: str, data: ReceiptUpdate, db: AsyncSession = Depends(get_db)):
     """
     Manually updates receipt metadata (store, date, total amount).
     Marks the receipt with is_manual_override=True to protect user edits.
     """
-    updated = ReceiptService.update_receipt(receipt_id, data.model_dump(exclude_unset=True))
+    updated = await ReceiptService.update_receipt_in_db(db, receipt_id, data.model_dump(exclude_unset=True))
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -54,12 +49,18 @@ async def update_receipt(receipt_id: str, data: ReceiptUpdate):
 
 
 @router.patch("/{receipt_id}/lines/{line_id}", response_model=ReceiptLineResponse)
-async def update_receipt_line(receipt_id: str, line_id: str, data: ReceiptLineUpdate):
+async def update_receipt_line(
+    receipt_id: str,
+    line_id: str,
+    data: ReceiptLineUpdate,
+    db: AsyncSession = Depends(get_db),
+):
     """
     Manually edits a receipt line (quantity, price, description, product link).
     Marks is_manual_override=True and validation_status='MANUALLY_EDITED'.
     """
-    updated_line = ReceiptService.update_receipt_line(
+    updated_line = await ReceiptService.update_receipt_line_in_db(
+        db,
         receipt_id,
         line_id,
         data.model_dump(exclude_unset=True),
@@ -73,7 +74,7 @@ async def update_receipt_line(receipt_id: str, line_id: str, data: ReceiptLineUp
 
 
 @router.post("/upload", response_model=ReceiptDetailResponse, status_code=status.HTTP_201_CREATED)
-async def upload_receipt_pdf(file: UploadFile = File(...)):
+async def upload_receipt_pdf(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """Uploads a Mercadona PDF ticket, extracts its contents deterministically, and saves it."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
@@ -85,7 +86,7 @@ async def upload_receipt_pdf(file: UploadFile = File(...)):
         content = await file.read()
         import io
         stream = io.BytesIO(content)
-        receipt = ReceiptService.process_and_save_pdf(stream, file.filename)
+        receipt = await ReceiptService.process_and_save_pdf(stream, file.filename, db=db)
         return receipt
     except Exception as e:
         raise HTTPException(

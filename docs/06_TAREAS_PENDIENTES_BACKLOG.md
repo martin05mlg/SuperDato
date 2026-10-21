@@ -52,6 +52,7 @@ Este documento desglosa todas las tareas técnicas del proyecto SuperDato por do
 - [x] **TSK-405 (P1)**: Implementar endpoints de gestión y búsqueda de catálogo (`/api/v1/catalog/products`, `/api/v1/catalog/categories`, `/api/v1/catalog/products/{id}/price-history`).
 - [x] **TSK-406 (P1)**: Implementar edición manual de líneas de ticket (`PATCH /api/v1/receipts/{id}/lines/{line_id}`) preservando la información original con `is_manual_override = True` y `validation_status = 'MANUALLY_EDITED'`.
 - [x] **TSK-407 (P0)**: Escribir tests en `tests/domains/test_catalog.py` cubriendo normalización, alias, inmutabilidad de precios y llamadas a la API.
+- [x] **TSK-408 (P0)**: Corregir carga de detalle de ticket (`GET /api/v1/receipts/{id}`) conectándolo directamente a la base de datos SQLAlchemy con `selectinload` de líneas y desglose fiscal (IVA), resolviendo referencias de clases en mappers y validación de esquemas Pydantic.
 
 ---
 

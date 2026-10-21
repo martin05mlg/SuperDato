@@ -253,14 +253,19 @@ class ReceiptLine(Base):
 
     # Relationships
     receipt: Mapped["Receipt"] = relationship("Receipt", back_populates="lines")
-    product: Mapped[Optional["app.domains.catalog.models.Product"]] = relationship(
-        "app.domains.catalog.models.Product",
+    product: Mapped[Optional["Product"]] = relationship(
+        "Product",
         back_populates="receipt_lines",
     )
-    price_observation: Mapped[Optional["app.domains.catalog.models.PriceObservation"]] = relationship(
-        "app.domains.catalog.models.PriceObservation",
+    price_observation: Mapped[Optional["PriceObservation"]] = relationship(
+        "PriceObservation",
         back_populates="receipt_line",
         uselist=False,
         cascade="all, delete-orphan",
     )
+
+
+# Register catalog models in DeclarativeBase registry
+import app.domains.catalog.models  # noqa: F401
+
 

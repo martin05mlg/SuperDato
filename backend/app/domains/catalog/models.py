@@ -106,8 +106,8 @@ class Product(Base, TimestampMixin):
         back_populates="product",
         cascade="all, delete-orphan",
     )
-    receipt_lines: Mapped[List["app.domains.receipts.models.ReceiptLine"]] = relationship(
-        "app.domains.receipts.models.ReceiptLine",
+    receipt_lines: Mapped[List["ReceiptLine"]] = relationship(
+        "ReceiptLine",
         back_populates="product",
     )
 
@@ -210,8 +210,8 @@ class PriceObservation(Base):
         "Product",
         back_populates="price_observations",
     )
-    receipt_line: Mapped["app.domains.receipts.models.ReceiptLine"] = relationship(
-        "app.domains.receipts.models.ReceiptLine",
+    receipt_line: Mapped["ReceiptLine"] = relationship(
+        "ReceiptLine",
         back_populates="price_observation",
     )
 

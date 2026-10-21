@@ -54,6 +54,6 @@ gantt
 | **10. Coherencia en los filtros del dashboard** | Fase 5 | Filtro global por rango de fechas aplicado sincrónicamente a todos los gráficos y KPIs. | Pendiente |
 | **11. Aislamiento total entre casas ajenas** | Fase 2 | Tests de seguridad que verifican que un usuario sin membresía recibe HTTP 403 / 404 al acceder a datos de otra casa. | **Verificado** |
 | **12. Consulta y recuperación de errores de importación** | Fase 3 | Vista de monitor de importaciones (`import_jobs`) y botón de reintento de procesamiento. | **Verificado** |
-| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 17 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **En progreso (17/17 OK)** |
+| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 18 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **En progreso (18/18 OK)** |
 | **14. Documentación completa de instalación y uso** | Fase 6 | Documentos Markdown en `docs/` y archivo `README.md` con instrucciones de arranque con Docker. | **En progreso** |
 
