@@ -1,0 +1,153 @@
+import uuid
+from datetime import datetime, timezone
+from typing import Optional
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
+from app.domains.auth.models import User
+from app.domains.auth.schemas import TokenResponse, UserLogin, UserRegister, UserResponse, UserUpdate
+from app.domains.households.models import Household, HouseholdMembership
+
+
+class AuthService:
+    @staticmethod
+    async def register(db: AsyncSession, data: UserRegister) -> TokenResponse:
+        # Check if email is already taken
+        query = select(User).where(User.email == data.email.lower().strip())
+        result = await db.execute(query)
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe una cuenta registrada con este correo electrónico.",
+            )
+
+        # Create user
+        user = User(
+            email=data.email.lower().strip(),
+            hashed_password=hash_password(data.password),
+            full_name=data.full_name.strip(),
+            is_active=True,
+            is_verified=True,  # In MVP initial setup auto-verified
+        )
+        db.add(user)
+        await db.flush()
+
+        # Create initial default household for the user
+        household = Household(
+            name=f"Hogar de {user.full_name}",
+            currency="EUR",
+            created_by_user_id=user.id,
+        )
+        db.add(household)
+        await db.flush()
+
+        # Assign user as OWNER of this household
+        membership = HouseholdMembership(
+            household_id=household.id,
+            user_id=user.id,
+            role="OWNER",
+        )
+        db.add(membership)
+        await db.commit()
+        await db.refresh(user)
+
+        # Generate tokens
+        access_token = create_access_token(subject=str(user.id))
+        refresh_token = create_refresh_token(subject=str(user.id))
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=UserResponse.model_validate(user),
+        )
+
+    @staticmethod
+    async def login(db: AsyncSession, data: UserLogin) -> TokenResponse:
+        query = select(User).where(User.email == data.email.lower().strip())
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+
+        if not user or not verify_password(data.password, user.hashed_password):
+            if user:
+                user.failed_login_attempts += 1
+                await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credenciales incorrectas. Verifica tu email y contraseña.",
+            )
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cuenta desactivada o bloqueada.",
+            )
+
+        # Reset failed login attempts upon successful login
+        if user.failed_login_attempts > 0:
+            user.failed_login_attempts = 0
+            await db.commit()
+
+        access_token = create_access_token(subject=str(user.id))
+        refresh_token = create_refresh_token(subject=str(user.id))
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=UserResponse.model_validate(user),
+        )
+
+    @staticmethod
+    async def refresh_token(db: AsyncSession, refresh_token_str: str) -> TokenResponse:
+        payload = decode_token(refresh_token_str)
+        if not payload or payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token inválido o expirado.",
+            )
+
+        user_id_str = payload.get("sub")
+        try:
+            user_uuid = uuid.UUID(user_id_str)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="ID de usuario inválido en token.",
+            )
+
+        query = select(User).where(User.id == user_uuid)
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario no válido para renovación.",
+            )
+
+        new_access_token = create_access_token(subject=str(user.id))
+        new_refresh_token = create_refresh_token(subject=str(user.id))
+
+        return TokenResponse(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            user=UserResponse.model_validate(user),
+        )
+
+    @staticmethod
+    async def update_profile(db: AsyncSession, user: User, data: UserUpdate) -> UserResponse:
+        if data.full_name is not None:
+            user.full_name = data.full_name.strip()
+        if data.password is not None:
+            user.hashed_password = hash_password(data.password)
+
+        await db.commit()
+        await db.refresh(user)
+        return UserResponse.model_validate(user)
+

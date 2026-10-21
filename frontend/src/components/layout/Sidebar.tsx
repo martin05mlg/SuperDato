@@ -1,0 +1,58 @@
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Receipt,
+  Package,
+  ArrowDownToLine,
+  Settings,
+  Sparkles
+} from 'lucide-react';
+
+const navItems = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/receipts', label: 'Tickets', icon: Receipt },
+  { to: '/products', label: 'Productos y Precios', icon: Package },
+  { to: '/imports', label: 'Importaciones y Gmail', icon: ArrowDownToLine },
+  { to: '/settings', label: 'Ajustes del Hogar', icon: Settings },
+];
+
+export const Sidebar: React.FC = () => {
+  return (
+    <aside className="w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-4rem)] p-4 hidden md:flex flex-col justify-between">
+      <nav className="space-y-1">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `flex items-center space-x-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+                  isActive
+                    ? 'bg-emerald-50 text-emerald-700 font-semibold'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`
+              }
+            >
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      {/* Footer Info Box */}
+      <div className="bg-emerald-900/5 rounded-2xl p-4 border border-emerald-900/10 text-xs text-slate-600 space-y-2">
+        <div className="flex items-center space-x-1.5 font-semibold text-emerald-800">
+          <Sparkles className="w-4 h-4 text-emerald-600" />
+          <span>SuperDato MVP</span>
+        </div>
+        <p className="text-slate-500 text-[11px] leading-relaxed">
+          Sincronización digital y análisis contable de tickets de Mercadona.
+        </p>
+      </div>
+    </aside>
+  );
+};
+
