@@ -56,3 +56,4 @@ gantt
 | **12. Consulta y recuperación de errores de importación** | Fase 3 | Vista de monitor de importaciones (`import_jobs`) y botón de reintento de procesamiento. | **Verificado** |
 | **13. Suite de pruebas automáticas aprobada** | Fase 6 | 17 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **En progreso (17/17 OK)** |
 | **14. Documentación completa de instalación y uso** | Fase 6 | Documentos Markdown en `docs/` y archivo `README.md` con instrucciones de arranque con Docker. | **En progreso** |
+

@@ -249,3 +249,4 @@ async def add_product_alias(
         "source": alias.source,
         "is_verified": alias.is_verified,
     }
+

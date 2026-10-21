@@ -263,3 +263,4 @@ class ReceiptLine(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+

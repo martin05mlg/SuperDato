@@ -175,3 +175,4 @@ async def test_catalog_api_endpoints(client: AsyncClient):
     history_res = await client.get(f"/api/v1/catalog/products/{product_id}/price-history")
     assert history_res.status_code == 200
     assert history_res.json()["product_name"] == "Aceite de Oliva Virgen Extra 1L"
+

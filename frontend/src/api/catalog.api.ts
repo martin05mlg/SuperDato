@@ -68,3 +68,4 @@ export const catalogApi = {
     return res.data;
   },
 };
+

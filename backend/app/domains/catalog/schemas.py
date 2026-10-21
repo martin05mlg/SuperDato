@@ -97,3 +97,4 @@ class PriceHistoryResponse(BaseModel):
     max_price: Optional[float] = None
     price_change_pct: Optional[float] = None
     observations: List[PriceObservationResponse] = []
+

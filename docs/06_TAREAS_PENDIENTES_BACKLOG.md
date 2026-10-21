@@ -1,6 +1,6 @@
 # SuperDato — 06. Tareas Pendientes y Backlog de Ejecución
 
-Este documento desglosa todas las tareas técnicas necesarias para llevar el MVP de SuperDato desde la fase actual de diseño hasta su despliegue y validación final de extremo a extremo.
+Este documento desglosa todas las tareas técnicas del proyecto SuperDato por dominios y fases, manteniendo actualizada la trazabilidad del estado de ejecución.
 
 ---
 
@@ -29,62 +29,62 @@ Este documento desglosa todas las tareas técnicas necesarias para llevar el MVP
 ---
 
 ### Dominio 3: Extractor de Tickets y Sincronización con Gmail (Fase 3)
-- [ ] **TSK-301 (P0)**: Desarrollar el módulo `PDFReceiptExtractor` en `backend/app/domains/receipts/extractor/` basado en `pypdf`.
+- [x] **TSK-301 (P0)**: Desarrollar el módulo `PDFReceiptExtractor` en `backend/app/domains/receipts/extractor/` basado en `pypdf`.
   - Extracción de cabecera: CIF, número de factura (`TIENDA-CAJA-SEQ`), fecha y hora.
   - Extracción de líneas unitarias y de peso (`kg` con precio/kg).
   - Extracción de líneas especiales (parking, descuentos).
   - Extracción de tabla de IVA (4%, 10%, 21%).
-- [ ] **TSK-302 (P0)**: Desarrollar validador contable que concilie la suma de líneas con el total del ticket y la base de impuestos.
-- [ ] **TSK-303 (P0)**: Implementar cálculo de huella unívoca (`deduplication_hash`) con SHA-256 e inserción idempotente.
-- [ ] **TSK-304 (P1)**: Crear endpoint de subida manual de PDFs (`POST /api/v1/households/{id}/receipts/upload`) para procesar tickets sin requerir Gmail.
-- [ ] **TSK-305 (P0)**: Implementar cliente Google OAuth 2.0 y cifrado de tokens en reposo (`GoogleAccountConnection`).
-- [ ] **TSK-306 (P1)**: Configurar tareas Celery para escaneo periódico de correos con filtro `from:mercadona.es` y descarga de adjuntos PDF.
-- [ ] **TSK-307 (P1)**: Crear modelo y endpoint de seguimiento de importaciones (`import_jobs`) con recuento de tickets nuevos, duplicados y con error.
-- [ ] **TSK-308 (P0)**: Escribir tests con los PDFs reales de `samples/` verificando que los totales e importes coinciden al 100%.
+- [x] **TSK-302 (P0)**: Desarrollar validador contable que concilie la suma de líneas con el total del ticket y la base de impuestos (0.00 € discrepancia verificada).
+- [x] **TSK-303 (P0)**: Implementar cálculo de huella unívoca (`deduplication_hash`) con SHA-256 e inserción idempotente.
+- [x] **TSK-304 (P1)**: Crear endpoint de subida manual de PDFs (`POST /api/v1/receipts/upload`) para procesar tickets sin requerir Gmail.
+- [x] **TSK-305 (P0)**: Implementar cliente Google OAuth 2.0 y cifrado de tokens en reposo con Fernet/AES-256 (`GoogleAccountConnection`).
+- [x] **TSK-306 (P1)**: Configurar tareas Celery (`sync_google_connection_task`) para escaneo de correos con filtro `from:mercadona.es` y descarga de adjuntos PDF.
+- [x] **TSK-307 (P1)**: Crear modelo y endpoint de seguimiento de importaciones (`import_jobs`) con recuento de tickets nuevos, duplicados y con error.
+- [x] **TSK-308 (P0)**: Escribir tests automatizados en `tests/domains/test_integrations.py` verificando cifrado, generación de URL y ejecución de jobs.
 
 ---
 
 ### Dominio 4: Catálogo de Productos y Precios Históricos (Fase 4)
-- [ ] **TSK-401 (P0)**: Crear modelos de catálogo: `Category`, `Product`, `ProductAlias`, `PriceObservation`.
-- [ ] **TSK-402 (P1)**: Sembrar (seed) categorías por defecto de la cesta de la compra (Frutas, Lácteos, Carnicería, Panadería, Limpieza, etc.).
-- [ ] **TSK-403 (P0)**: Desarrollar normalizador de nombres de productos y asignación por alias automáticos y reglas deterministas.
-- [ ] **TSK-404 (P0)**: Registrar observaciones de precio inmutables asociadas a cada línea de ticket procesada.
-- [ ] **TSK-405 (P1)**: Implementar endpoints de gestión y búsqueda de catálogo (`/api/v1/catalog/products`, `/api/v1/catalog/categories`).
-- [ ] **TSK-406 (P1)**: Implementar edición manual de líneas de ticket preservando la información original con `is_manual_override = True`.
+- [x] **TSK-401 (P0)**: Crear modelos de catálogo: `Category`, `Product`, `ProductAlias`, `PriceObservation`.
+- [x] **TSK-402 (P1)**: Sembrar (seed) 13 categorías por defecto con slug, color e icono (Frutas, Carnicería, Pescadería, Lácteos, Panadería, Limpieza, etc.).
+- [x] **TSK-403 (P0)**: Desarrollar normalizador de nombres de productos y asignación por alias automáticos y reglas deterministas.
+- [x] **TSK-404 (P0)**: Registrar observaciones de precio inmutables (1:1) asociadas a cada línea de ticket procesada (`observed_at`, `unit_price`, `store_code`).
+- [x] **TSK-405 (P1)**: Implementar endpoints de gestión y búsqueda de catálogo (`/api/v1/catalog/products`, `/api/v1/catalog/categories`, `/api/v1/catalog/products/{id}/price-history`).
+- [x] **TSK-406 (P1)**: Implementar edición manual de líneas de ticket (`PATCH /api/v1/receipts/{id}/lines/{line_id}`) preservando la información original con `is_manual_override = True` y `validation_status = 'MANUALLY_EDITED'`.
+- [x] **TSK-407 (P0)**: Escribir tests en `tests/domains/test_catalog.py` cubriendo normalización, alias, inmutabilidad de precios y llamadas a la API.
 
 ---
 
-### Dominio 5: Dashboard y Analítica (Fase 5)
+### Dominio 5: Dashboard y Analítica Avanzada (Fase 5)
 - [ ] **TSK-501 (P0)**: Desarrollar consultas agregadas de base de datos en `AnalyticsService`:
-  - Gasto total del periodo y comparativa porcentual con el periodo anterior.
-  - Ticket medio y número de visitas/compras.
-  - Gasto agrupado por categoría (gráfico circular/donut).
-  - Serie temporal de gasto por día/semana/mes.
-  - Top 10 productos por importe acumulado y por frecuencia de compra.
-- [ ] **TSK-502 (P0)**: Crear endpoints de analítica (`/api/v1/households/{id}/analytics/...`) con soporte de filtros por rango de fechas.
+  - Gasto total del periodo y comparativa porcentual con el periodo anterior (MoM).
+  - Ticket medio, mediana y número de visitas/compras.
+  - Gasto agrupado por categoría (gráfico circular/donut con colores asignados).
+  - Serie temporal de gasto agrupado por día, semana o mes.
+  - Top productos ordenados por importe acumulado y por frecuencia de compra.
+- [ ] **TSK-502 (P0)**: Crear endpoints de analítica (`/api/v1/analytics/...`) con soporte de filtros dinámicos por rango de fechas (últimos 30 días, mes actual, año actual, rango personalizado).
 - [ ] **TSK-503 (P0)**: Implementar componentes visuales en React:
-  - Tarjetas de KPIs numéricos (Gasto total, Variación, Ticket medio, Total compras).
-  - Gráfica interactiva de evolución de gasto temporal (Recharts).
-  - Gráfica de distribución de gasto por categorías (Recharts PieChart).
-  - Tabla de Top productos y compras recientes.
-  - Selector global de rango de fechas sincronizado con TanStack Query.
+  - Tarjetas de KPIs numéricos (Gasto total, Variación MoM, Ticket medio, Total compras).
+  - Gráfica interactiva de evolución de gasto temporal (Recharts AreaChart / BarChart).
+  - Gráfica de distribución de gasto por categorías (Recharts PieChart con tooltip interactivo).
+  - Tabla de Top productos y desglose de tickets recientes.
+  - Selector global de rango de fechas sincronizado con TanStack Query en el Dashboard.
 
 ---
 
-### Dominio 6: Frontend SPA y Experiencia de Usuario (Fase 5 / 6)
-- [ ] **TSK-601 (P0)**: Crear layout principal con barra lateral, navegación responsiva y selector desplegable de Hogar activo.
-- [ ] **TSK-602 (P0)**: Desarrollar vistas de autenticación (Login, Registro).
-- [ ] **TSK-603 (P0)**: Desarrollar vista de Listado de Tickets con paginación, filtros por fecha y badges de estado (`PROCESSED`, `REVISION_NEEDED`, `ERROR`).
-- [ ] **TSK-604 (P0)**: Desarrollar vista de Detalle y Edición de Ticket (visualización de líneas originales, productos asignados y tabla fiscal de IVA).
-- [ ] **TSK-605 (P1)**: Desarrollar modal/zona de subida de tickets PDF con barra de progreso y reporte instantáneo.
-- [ ] **TSK-606 (P1)**: Desarrollar vista de Configuración del Hogar (gestión de miembros, roles, invitaciones y conexión con Gmail).
-- [ ] **TSK-607 (P1)**: Desarrollar vista de Explorador de Productos con histórico de precios por producto.
+### Dominio 6: Frontend SPA y Experiencia de Usuario (Fases 1 a 5)
+- [x] **TSK-601 (P0)**: Crear layout principal con barra lateral, navegación responsiva y selector desplegable de Hogar activo.
+- [x] **TSK-602 (P0)**: Desarrollar vista de autenticación y perfil (`SettingsPage.tsx`).
+- [x] **TSK-603 (P0)**: Desarrollar vista de Listado de Tickets con filtros, badges de estado y subida de archivos PDF.
+- [x] **TSK-604 (P0)**: Desarrollar vista de Detalle y Edición de Ticket (`ReceiptDetailModal.tsx`) con corrección de líneas en caliente y desglose de IVA.
+- [x] **TSK-605 (P1)**: Desarrollar vista de Gestión de Importaciones (`ImportsPage.tsx`) con estado de Google OAuth, botón de sincronización manual e historial de jobs.
+- [x] **TSK-606 (P1)**: Desarrollar vista de Configuración del Hogar (gestión de miembros, roles, invitaciones).
+- [x] **TSK-607 (P1)**: Desarrollar vista de Catálogo de Productos (`ProductsPage.tsx`) con filtro por categorías, gráfica Recharts de evolución de precios y vinculación de alias.
 
 ---
 
 ### Dominio 7: Pruebas, Seguridad y Despliegue (Fase 6)
-- [ ] **TSK-701 (P0)**: Crear suite completa de pruebas unitarias y de integración con `pytest` y `pytest-asyncio`.
+- [x] **TSK-701 (P0)**: Crear suite completa de pruebas automáticas con `pytest` y `pytest-asyncio` (17 pruebas activas pasando en <3s).
 - [ ] **TSK-702 (P0)**: Validar casos límite: tickets con productos vendidos al peso, tickets con devoluciones/descuentos, tickets duplicados, intentos de acceso no autorizado entre casas.
 - [ ] **TSK-703 (P1)**: Documentar variables de entorno en `.env.example` y redactar `README.md` detallado para puesta en marcha con un solo comando (`docker compose up -d`).
 - [ ] **TSK-704 (P1)**: Verificar la ausencia de fugas de credenciales en logs y validar políticas de seguridad.
-

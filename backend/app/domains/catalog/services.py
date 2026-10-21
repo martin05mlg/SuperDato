@@ -365,3 +365,4 @@ class CatalogService:
             "price_change_pct": change_pct,
             "observations": obs_data,
         }
+

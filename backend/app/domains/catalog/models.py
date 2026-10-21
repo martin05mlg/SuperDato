@@ -214,3 +214,4 @@ class PriceObservation(Base):
         "app.domains.receipts.models.ReceiptLine",
         back_populates="price_observation",
     )
+
