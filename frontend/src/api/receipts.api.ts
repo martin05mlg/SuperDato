@@ -2,6 +2,9 @@ import { apiClient } from './client';
 import type {
   Receipt,
   ReceiptResponse,
+  ReceiptLine,
+  ReceiptLineUpdate,
+  ReceiptUpdate,
   AnalyticsSummary,
   CategoryDistributionItem,
   SpendingEvolutionPoint,
@@ -15,6 +18,16 @@ export const receiptsApi = {
 
   getById: async (id: string): Promise<Receipt> => {
     const res = await apiClient.get<Receipt>(`/receipts/${id}`);
+    return res.data;
+  },
+
+  updateReceipt: async (id: string, data: ReceiptUpdate): Promise<Receipt> => {
+    const res = await apiClient.patch<Receipt>(`/receipts/${id}`, data);
+    return res.data;
+  },
+
+  updateLine: async (receiptId: string, lineId: string, data: ReceiptLineUpdate): Promise<ReceiptLine> => {
+    const res = await apiClient.patch<ReceiptLine>(`/receipts/${receiptId}/lines/${lineId}`, data);
     return res.data;
   },
 
@@ -44,4 +57,3 @@ export const receiptsApi = {
     return res.data;
   },
 };
-

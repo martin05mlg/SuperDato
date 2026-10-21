@@ -1,14 +1,92 @@
-import React from 'react';
-import type { Receipt } from '../../types';
-import { X, CheckCircle2, Calendar, MapPin, CreditCard, Receipt as ReceiptIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import type { Receipt, ReceiptLine } from '../../types';
+import {
+  X,
+  CheckCircle2,
+  Calendar,
+  MapPin,
+  CreditCard,
+  Receipt as ReceiptIcon,
+  Edit2,
+  Check,
+  AlertCircle,
+} from 'lucide-react';
+import { receiptsApi } from '../../api/receipts.api';
 
 interface Props {
   receipt: Receipt | null;
   onClose: () => void;
+  onReceiptUpdated?: (updated: Receipt) => void;
 }
 
-export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose }) => {
-  if (!receipt) return null;
+export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceiptUpdated }) => {
+  const [currentReceipt, setCurrentReceipt] = useState<Receipt | null>(receipt);
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    raw_description: string;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+  }>({
+    raw_description: '',
+    quantity: 1,
+    unit_price: 0,
+    line_total: 0,
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Sync internal state when prop changes
+  React.useEffect(() => {
+    setCurrentReceipt(receipt);
+    setEditingLineId(null);
+  }, [receipt]);
+
+  if (!currentReceipt) return null;
+
+  const handleStartEdit = (line: ReceiptLine) => {
+    setEditingLineId(line.id);
+    setEditForm({
+      raw_description: line.raw_description,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
+      line_total: line.line_total,
+    });
+    setSaveError(null);
+  };
+
+  const handleSaveLine = async (lineId: string) => {
+    if (!currentReceipt) return;
+    try {
+      setIsSaving(true);
+      setSaveError(null);
+
+      const updatedLine = await receiptsApi.updateLine(currentReceipt.id, lineId, editForm);
+
+      // Update in memory
+      const updatedLines = (currentReceipt.lines || []).map((l) =>
+        l.id === lineId ? { ...l, ...updatedLine } : l
+      );
+      const newTotal = updatedLines.reduce((acc, l) => acc + (l.line_total || 0), 0);
+
+      const updatedReceipt: Receipt = {
+        ...currentReceipt,
+        is_manual_override: true,
+        total_amount: Math.round(newTotal * 100) / 100,
+        lines: updatedLines,
+      };
+
+      setCurrentReceipt(updatedReceipt);
+      setEditingLineId(null);
+      if (onReceiptUpdated) {
+        onReceiptUpdated(updatedReceipt);
+      }
+    } catch (err: any) {
+      setSaveError(err.response?.data?.detail || 'Error al guardar la corrección de la línea.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -22,14 +100,21 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose }) => {
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="text-base font-bold text-slate-900">
-                  Factura {receipt.invoice_number}
+                  Factura {currentReceipt.invoice_number}
                 </h3>
                 <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CheckCircle2 className="w-3 h-3" />
                   <span>Procesado</span>
                 </span>
+                {currentReceipt.is_manual_override && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    <span>Modificado a mano</span>
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">{receipt.company_name} ({receipt.company_cif})</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {currentReceipt.company_name} ({currentReceipt.company_cif})
+              </p>
             </div>
           </div>
 
@@ -46,28 +131,44 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose }) => {
           <div className="flex items-center space-x-2 text-slate-600">
             <MapPin className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <span className="truncate">
-              {receipt.store_address ? `${receipt.store_address}, ${receipt.store_city || ''}` : 'Tienda Mercadona'}
+              {currentReceipt.store_address
+                ? `${currentReceipt.store_address}, ${currentReceipt.store_city || ''}`
+                : 'Tienda Mercadona'}
             </span>
           </div>
           <div className="flex items-center space-x-2 text-slate-600">
             <Calendar className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>{receipt.purchase_datetime.replace('T', ' ')}</span>
+            <span>{currentReceipt.purchase_datetime.replace('T', ' ')}</span>
           </div>
           <div className="flex items-center space-x-2 text-slate-600">
             <CreditCard className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <span>
-              {receipt.payment_method || 'Tarjeta'} {receipt.card_last_four ? `(**** ${receipt.card_last_four})` : ''}
+              {currentReceipt.payment_method || 'Tarjeta'}{' '}
+              {currentReceipt.card_last_four ? `(**** ${currentReceipt.card_last_four})` : ''}
             </span>
           </div>
         </div>
 
         {/* Scrollable Line Items */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          {saveError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
+
           {/* Items Table */}
           <div>
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
-              Líneas de Compra ({receipt.lines?.length || 0} artículos)
-            </h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Líneas de Compra ({currentReceipt.lines?.length || 0} artículos)
+              </h4>
+              <span className="text-[11px] text-slate-400 italic">
+                Haz clic en el lápiz para corregir manualmente una línea
+              </span>
+            </div>
+
             <div className="border border-slate-200 rounded-2xl overflow-hidden">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
@@ -78,43 +179,140 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose }) => {
                     <th className="py-2.5 px-3 text-right">Cant / Peso</th>
                     <th className="py-2.5 px-3 text-right">P. Unit</th>
                     <th className="py-2.5 px-3 text-right font-bold text-slate-800">Total</th>
+                    <th className="py-2.5 px-3 text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {receipt.lines?.map((line) => (
-                    <tr key={line.id} className="hover:bg-slate-50/50">
-                      <td className="py-2 px-3 text-slate-400">{line.line_order}</td>
-                      <td className="py-2 px-3 font-medium text-slate-800">
-                        {line.raw_description}
-                        {line.is_weighed_item && (
-                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-700 border border-amber-200">
-                            Granel
+                  {currentReceipt.lines?.map((line) => {
+                    const isEditing = editingLineId === line.id;
+
+                    if (isEditing) {
+                      return (
+                        <tr key={line.id} className="bg-amber-50/50">
+                          <td className="py-2 px-3 text-slate-400">{line.line_order}</td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={editForm.raw_description}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, raw_description: e.target.value })
+                              }
+                              className="w-full px-2 py-1 text-xs border border-amber-300 rounded font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-slate-500">
+                            {line.category_name || 'Alimentación'}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={editForm.quantity}
+                              onChange={(e) => {
+                                const q = parseFloat(e.target.value) || 0;
+                                const tot = Math.round(q * editForm.unit_price * 100) / 100;
+                                setEditForm({ ...editForm, quantity: q, line_total: tot });
+                              }}
+                              className="w-16 px-1.5 py-1 text-xs border border-amber-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editForm.unit_price}
+                              onChange={(e) => {
+                                const p = parseFloat(e.target.value) || 0;
+                                const tot = Math.round(editForm.quantity * p * 100) / 100;
+                                setEditForm({ ...editForm, unit_price: p, line_total: tot });
+                              }}
+                              className="w-16 px-1.5 py-1 text-xs border border-amber-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editForm.line_total}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  line_total: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              className="w-16 px-1.5 py-1 text-xs border border-amber-300 rounded text-right font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-right space-x-1">
+                            <button
+                              disabled={isSaving}
+                              onClick={() => handleSaveLine(line.id)}
+                              className="p-1 text-emerald-600 hover:bg-emerald-100 rounded transition"
+                              title="Guardar"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setEditingLineId(null)}
+                              className="p-1 text-slate-400 hover:bg-slate-100 rounded transition"
+                              title="Cancelar"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={line.id} className="hover:bg-slate-50/50">
+                        <td className="py-2 px-3 text-slate-400">{line.line_order}</td>
+                        <td className="py-2 px-3 font-medium text-slate-800">
+                          {line.raw_description}
+                          {line.is_weighed_item && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-700 border border-amber-200">
+                              Granel
+                            </span>
+                          )}
+                          {line.is_manual_override && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-700 border border-blue-200">
+                              Editado
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="inline-block px-2 py-0.5 rounded-md text-[11px] bg-slate-100 text-slate-700">
+                            {line.category_name || 'Alimentación'}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="inline-block px-2 py-0.5 rounded-md text-[11px] bg-slate-100 text-slate-700">
-                          {line.category_name || 'Alimentación'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-right text-slate-600">
-                        {line.quantity} {line.unit_of_measure}
-                      </td>
-                      <td className="py-2 px-3 text-right text-slate-600">
-                        {line.unit_price.toFixed(2)} €
-                      </td>
-                      <td className="py-2 px-3 text-right font-bold text-slate-900">
-                        {line.line_total.toFixed(2)} €
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-2 px-3 text-right text-slate-600">
+                          {line.quantity} {line.unit_of_measure}
+                        </td>
+                        <td className="py-2 px-3 text-right text-slate-600">
+                          {line.unit_price.toFixed(2)} €
+                        </td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-900">
+                          {line.line_total.toFixed(2)} €
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <button
+                            onClick={() => handleStartEdit(line)}
+                            className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition"
+                            title="Editar línea"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
 
           {/* Tax Breakdown */}
-          {receipt.tax_lines && receipt.tax_lines.length > 0 && (
+          {currentReceipt.tax_lines && currentReceipt.tax_lines.length > 0 && (
             <div>
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
                 Desglose Fiscal (IVA)
@@ -130,12 +328,20 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {receipt.tax_lines.map((tax) => (
+                    {currentReceipt.tax_lines.map((tax) => (
                       <tr key={tax.id}>
-                        <td className="py-2 px-3 font-semibold text-slate-800">{tax.tax_rate_percent}%</td>
-                        <td className="py-2 px-3 text-right text-slate-600">{tax.taxable_base.toFixed(2)} €</td>
-                        <td className="py-2 px-3 text-right text-slate-600">{tax.tax_amount.toFixed(2)} €</td>
-                        <td className="py-2 px-3 text-right font-bold text-slate-900">{tax.total_with_tax.toFixed(2)} €</td>
+                        <td className="py-2 px-3 font-semibold text-slate-800">
+                          {tax.tax_rate_percent}%
+                        </td>
+                        <td className="py-2 px-3 text-right text-slate-600">
+                          {tax.taxable_base.toFixed(2)} €
+                        </td>
+                        <td className="py-2 px-3 text-right text-slate-600">
+                          {tax.tax_amount.toFixed(2)} €
+                        </td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-900">
+                          {tax.total_with_tax.toFixed(2)} €
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -149,13 +355,13 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose }) => {
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <div className="text-xs text-slate-500 flex items-center space-x-1">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Conciliación contable verificada al 100%</span>
+            <span>Conciliación contable verificada</span>
           </div>
 
           <div className="flex items-center space-x-3">
             <span className="text-sm text-slate-600">Importe Total:</span>
             <span className="text-2xl font-black text-slate-900">
-              {receipt.total_amount.toFixed(2)} €
+              {currentReceipt.total_amount.toFixed(2)} €
             </span>
           </div>
         </div>

@@ -6,6 +6,7 @@ class ReceiptLineResponse(BaseModel):
     id: str
     line_order: int
     raw_description: str
+    product_id: Optional[str] = None
     product_name: Optional[str] = None
     category_name: Optional[str] = None
     quantity: float
@@ -17,6 +18,18 @@ class ReceiptLineResponse(BaseModel):
     weight_in_kg: Optional[float] = None
     validation_status: str = "VALID"
     is_manual_override: bool = False
+
+
+class ReceiptLineUpdate(BaseModel):
+    raw_description: Optional[str] = None
+    product_name: Optional[str] = None
+    product_id: Optional[str] = None
+    category_name: Optional[str] = None
+    quantity: Optional[float] = None
+    unit_of_measure: Optional[str] = None
+    unit_price: Optional[float] = None
+    discount_amount: Optional[float] = None
+    line_total: Optional[float] = None
 
 
 class ReceiptTaxLineResponse(BaseModel):
@@ -49,6 +62,17 @@ class ReceiptResponse(BaseModel):
     created_at: str
 
 
+class ReceiptUpdate(BaseModel):
+    household_id: Optional[str] = None
+    store_address: Optional[str] = None
+    store_city: Optional[str] = None
+    store_postal_code: Optional[str] = None
+    purchase_date: Optional[str] = None
+    total_amount: Optional[float] = None
+    payment_method: Optional[str] = None
+    status: Optional[str] = None
+
+
 class ReceiptDetailResponse(ReceiptResponse):
     lines: List[ReceiptLineResponse] = []
     tax_lines: List[ReceiptTaxLineResponse] = []
@@ -76,4 +100,3 @@ class SpendingPointResponse(BaseModel):
     date: str
     total_amount: float
     receipt_count: int
-

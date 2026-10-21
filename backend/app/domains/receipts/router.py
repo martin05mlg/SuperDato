@@ -1,14 +1,28 @@
 from typing import List
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
-from app.domains.receipts.schemas import ReceiptDetailResponse, ReceiptResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.domains.receipts.schemas import (
+    ReceiptDetailResponse,
+    ReceiptLineResponse,
+    ReceiptLineUpdate,
+    ReceiptResponse,
+    ReceiptUpdate,
+)
 from app.domains.receipts.services import ReceiptService
 
 router = APIRouter(prefix="/receipts", tags=["Receipts"])
 
 
 @router.get("", response_model=List[ReceiptResponse])
-async def list_receipts():
+async def list_receipts(db: AsyncSession = Depends(get_db)):
     """Returns the list of all imported Mercadona digital receipts."""
+    # Proactively sync samples to DB if needed
+    try:
+        await ReceiptService.sync_sample_receipts_to_db(db)
+    except Exception:
+        pass
     return ReceiptService.get_all_receipts()
 
 
@@ -22,6 +36,40 @@ async def get_receipt_detail(receipt_id: str):
             detail=f"Ticket con ID '{receipt_id}' no encontrado.",
         )
     return receipt
+
+
+@router.patch("/{receipt_id}", response_model=ReceiptDetailResponse)
+async def update_receipt(receipt_id: str, data: ReceiptUpdate):
+    """
+    Manually updates receipt metadata (store, date, total amount).
+    Marks the receipt with is_manual_override=True to protect user edits.
+    """
+    updated = ReceiptService.update_receipt(receipt_id, data.model_dump(exclude_unset=True))
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket con ID '{receipt_id}' no encontrado.",
+        )
+    return updated
+
+
+@router.patch("/{receipt_id}/lines/{line_id}", response_model=ReceiptLineResponse)
+async def update_receipt_line(receipt_id: str, line_id: str, data: ReceiptLineUpdate):
+    """
+    Manually edits a receipt line (quantity, price, description, product link).
+    Marks is_manual_override=True and validation_status='MANUALLY_EDITED'.
+    """
+    updated_line = ReceiptService.update_receipt_line(
+        receipt_id,
+        line_id,
+        data.model_dump(exclude_unset=True),
+    )
+    if not updated_line:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Línea con ID '{line_id}' en ticket '{receipt_id}' no encontrada.",
+        )
+    return updated_line
 
 
 @router.post("/upload", response_model=ReceiptDetailResponse, status_code=status.HTTP_201_CREATED)
@@ -44,4 +92,3 @@ async def upload_receipt_pdf(file: UploadFile = File(...)):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Error al extraer los datos del ticket PDF: {str(e)}",
         )
-

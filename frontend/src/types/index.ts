@@ -57,6 +57,18 @@ export interface ReceiptLine {
   is_manual_override: boolean;
 }
 
+export interface ReceiptLineUpdate {
+  raw_description?: string;
+  product_name?: string;
+  product_id?: string;
+  category_name?: string;
+  quantity?: number;
+  unit_of_measure?: string;
+  unit_price?: number;
+  discount_amount?: number;
+  line_total?: number;
+}
+
 export interface Receipt {
   id: string;
   household_id: string;
@@ -80,6 +92,15 @@ export interface Receipt {
   lines_count?: number;
 }
 
+export interface ReceiptUpdate {
+  household_id?: string;
+  store_address?: string;
+  store_city?: string;
+  purchase_date?: string;
+  total_amount?: number;
+  status?: string;
+}
+
 export type ReceiptResponse = Receipt;
 
 export interface Category {
@@ -89,24 +110,52 @@ export interface Category {
   slug: string;
   icon?: string | null;
   color_hex?: string | null;
+  is_system?: boolean;
+  product_count?: number;
 }
 
 export interface Product {
   id: string;
   canonical_name: string;
   category_id: string;
-  category_name?: string;
+  category_name?: string | null;
+  category_color?: string | null;
   default_unit: string;
   format_description?: string | null;
+  latest_price?: number | null;
+  latest_price_per_kg_or_l?: number | null;
+  latest_date?: string | null;
+  observations_count?: number;
+  min_price?: number | null;
+  max_price?: number | null;
+  aliases?: string[];
   created_at: string;
 }
 
 export interface PriceObservation {
   id: string;
+  household_id: string;
+  product_id: string;
+  receipt_line_id: string;
+  observed_at: string;
   observed_date: string;
   unit_price: number;
   price_per_kg_or_l?: number | null;
   store_code?: string | null;
+  raw_description?: string | null;
+}
+
+export interface PriceHistory {
+  product_id: string;
+  product_name: string;
+  category_name?: string | null;
+  category_color?: string | null;
+  default_unit: string;
+  current_price?: number | null;
+  min_price?: number | null;
+  max_price?: number | null;
+  price_change_pct?: number | null;
+  observations: PriceObservation[];
 }
 
 export interface AnalyticsSummary {
@@ -142,4 +191,3 @@ export interface TopProductItem {
   quantity_bought: number;
   purchase_count: number;
 }
-
