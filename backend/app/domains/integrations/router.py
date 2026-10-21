@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import encrypt_secret
 from app.domains.auth.models import User
@@ -60,45 +61,38 @@ async def google_oauth_callback(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Fallo al autenticar con Google: {str(e)}",
+            detail=f"Error al intercambiar código con Google: {str(e)}",
         )
 
-    encrypted_tokens = encrypt_secret(json.dumps(tokens))
+    encrypted_payload = encrypt_secret(json.dumps(tokens))
 
-    # Look for existing connection for this user and email
+    # Check if connection already exists
     query = select(GoogleAccountConnection).where(
-        GoogleAccountConnection.user_id == user_id,
-        GoogleAccountConnection.google_email == google_email,
+        GoogleAccountConnection.household_id == household_id
     )
     result = await db.execute(query)
     conn = result.scalar_one_or_none()
 
-    if conn:
-        conn.encrypted_tokens = encrypted_tokens
-        conn.household_id = household_id
-        conn.sync_status = "IDLE"
-        conn.last_error = None
-    else:
+    if not conn:
         conn = GoogleAccountConnection(
+            id=uuid.uuid4(),
             user_id=user_id,
             household_id=household_id,
             google_email=google_email,
-            encrypted_tokens=encrypted_tokens,
+            encrypted_tokens=encrypted_payload,
             scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+            initial_sync_date=datetime.now(timezone.utc).date(),
             sync_status="IDLE",
         )
         db.add(conn)
+    else:
+        conn.google_email = google_email
+        conn.encrypted_tokens = encrypted_payload
+        conn.sync_status = "IDLE"
+        conn.last_error = None
 
     await db.commit()
     await db.refresh(conn)
-
-    # Trigger initial sync in background via Celery
-    try:
-        from app.domains.integrations.tasks import sync_google_connection_task
-        sync_google_connection_task.delay(str(conn.id))
-    except Exception:
-        pass  # If celery broker is not active during tests, task is skipped safely
-
     return conn
 
 
@@ -108,12 +102,50 @@ async def get_google_connection_status(
     membership: HouseholdMembership = Depends(require_household_permission(Permission.VIEW_ANALYTICS)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns the active Google connection status for this household."""
+    """Returns the current connection status of Gmail for this household."""
     query = select(GoogleAccountConnection).where(
         GoogleAccountConnection.household_id == household_id
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
+
+
+@router.post("/google/connect-mock", response_model=GoogleConnectionResponse)
+async def connect_mock_google_account(
+    household_id: uuid.UUID = Query(...),
+    email: str = Query("mi.cuenta.mercadona@gmail.com"),
+    current_user: User = Depends(get_current_user),
+    membership: HouseholdMembership = Depends(require_household_permission(Permission.CONNECT_INTEGRATIONS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Simulates connecting a Google account for local testing without requiring external Google Cloud API keys."""
+    stmt = select(GoogleAccountConnection).where(GoogleAccountConnection.household_id == household_id)
+    res = await db.execute(stmt)
+    conn = res.scalar_one_or_none()
+
+    mock_tokens = json.dumps({"access_token": "mock_token", "refresh_token": "mock_refresh", "expires_in": 3600})
+    encrypted = encrypt_secret(mock_tokens)
+
+    if not conn:
+        conn = GoogleAccountConnection(
+            id=uuid.uuid4(),
+            user_id=current_user.id,
+            household_id=household_id,
+            google_email=email,
+            encrypted_tokens=encrypted,
+            scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+            initial_sync_date=datetime.now(timezone.utc).date(),
+            sync_status="IDLE",
+        )
+        db.add(conn)
+    else:
+        conn.google_email = email
+        conn.sync_status = "IDLE"
+        conn.last_error = None
+
+    await db.commit()
+    await db.refresh(conn)
+    return conn
 
 
 @router.post("/google/disconnect", status_code=status.HTTP_204_NO_CONTENT)
@@ -130,7 +162,10 @@ async def disconnect_google_account(
     conn = result.scalar_one_or_none()
 
     if conn:
-        await GoogleOAuthClient.revoke_tokens(conn.encrypted_tokens)
+        try:
+            await GoogleOAuthClient.revoke_tokens(conn.encrypted_tokens)
+        except Exception:
+            pass
         await db.delete(conn)
         await db.commit()
 
@@ -175,4 +210,3 @@ async def list_import_jobs(
     result = await db.execute(query)
     jobs = result.scalars().all()
     return jobs
-

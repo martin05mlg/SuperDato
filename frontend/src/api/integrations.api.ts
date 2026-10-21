@@ -43,6 +43,15 @@ export const integrationsApi = {
     return res.data;
   },
 
+  connectMockGoogle: async (householdId: string, email?: string): Promise<GoogleConnection> => {
+    const res = await apiClient.post<GoogleConnection>(
+      `/integrations/google/connect-mock?household_id=${householdId}&email=${encodeURIComponent(
+        email || 'mi.cuenta.mercadona@gmail.com'
+      )}`
+    );
+    return res.data;
+  },
+
   disconnectGoogle: async (householdId: string): Promise<void> => {
     await apiClient.post(`/integrations/google/disconnect?household_id=${householdId}`);
   },
@@ -61,4 +70,3 @@ export const integrationsApi = {
     return res.data;
   },
 };
-

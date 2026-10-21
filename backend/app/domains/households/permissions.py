@@ -5,12 +5,16 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.domains.auth.models import User
-from app.domains.households.models import HouseholdMembership
+from app.domains.households.models import Household, HouseholdMembership
 
-security_bearer = HTTPBearer(auto_error=True)
+security_bearer = HTTPBearer(auto_error=False)
+
+DEV_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+DEV_HOUSEHOLD_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
 
 
 class Role(str, enum.Enum):
@@ -60,10 +64,34 @@ ROLE_PERMISSIONS = {
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security_bearer),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Validates the JWT access token and returns the current user."""
+    """Validates the JWT access token or falls back to dev user in development mode."""
+    if not credentials:
+        if settings.ENVIRONMENT in ["development", "testing"]:
+            result = await db.execute(select(User).where(User.id == DEV_USER_ID))
+            dev_user = result.scalar_one_or_none()
+            if not dev_user:
+                dev_user = User(
+                    id=DEV_USER_ID,
+                    email="dev@superdato.local",
+                    hashed_password="mock_dev_password",
+                    full_name="Usuario Desarrollo",
+                    is_active=True,
+                    is_verified=True,
+                )
+                db.add(dev_user)
+                await db.commit()
+                await db.refresh(dev_user)
+            return dev_user
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Autenticación requerida.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     token = credentials.credentials
     payload = decode_token(token)
 
@@ -115,7 +143,39 @@ def require_household_permission(required_permission: Permission):
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> HouseholdMembership:
-        # Query membership
+        # In dev mode, auto-ensure dev household and OWNER membership
+        if current_user.id == DEV_USER_ID:
+            # Ensure household exists
+            hh = await db.get(Household, household_id)
+            if not hh:
+                hh = Household(
+                    id=household_id,
+                    name="Casa Principal",
+                    currency="EUR",
+                    created_by_user_id=DEV_USER_ID,
+                )
+                db.add(hh)
+                await db.commit()
+
+            q = select(HouseholdMembership).where(
+                HouseholdMembership.household_id == household_id,
+                HouseholdMembership.user_id == DEV_USER_ID,
+            )
+            res = await db.execute(q)
+            membership = res.scalar_one_or_none()
+            if not membership:
+                membership = HouseholdMembership(
+                    id=uuid.uuid4(),
+                    household_id=household_id,
+                    user_id=DEV_USER_ID,
+                    role="OWNER",
+                )
+                db.add(membership)
+                await db.commit()
+                await db.refresh(membership)
+            return membership
+
+        # Standard multi-tenant isolation verification
         query = select(HouseholdMembership).where(
             HouseholdMembership.household_id == household_id,
             HouseholdMembership.user_id == current_user.id,
@@ -141,4 +201,3 @@ def require_household_permission(required_permission: Permission):
         return membership
 
     return permission_checker
-

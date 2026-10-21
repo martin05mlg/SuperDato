@@ -3,6 +3,14 @@ import type { Household } from '../types';
 import { apiClient } from '../api/client';
 import { useAuth } from './AuthContext';
 
+export const DEV_HOUSEHOLD: Household = {
+  id: '00000000-0000-0000-0000-000000000002',
+  name: 'Casa Principal',
+  currency: 'EUR',
+  role: 'OWNER',
+  created_at: new Date().toISOString(),
+};
+
 interface HouseholdContextType {
   households: Household[];
   activeHousehold: Household | null;
@@ -15,43 +23,44 @@ const HouseholdContext = createContext<HouseholdContextType | undefined>(undefin
 
 export const HouseholdProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  const [households, setHouseholds] = useState<Household[]>([]);
-  const [activeHousehold, setActiveHouseholdState] = useState<Household | null>(null);
+  const [households, setHouseholds] = useState<Household[]>([DEV_HOUSEHOLD]);
+  const [activeHousehold, setActiveHouseholdState] = useState<Household | null>(DEV_HOUSEHOLD);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const fetchHouseholds = async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setHouseholds([DEV_HOUSEHOLD]);
+      setActiveHouseholdState(DEV_HOUSEHOLD);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await apiClient.get<Household[]>('/households');
-      setHouseholds(response.data);
-
-      const storedId = localStorage.getItem('active_household_id');
-      const found = response.data.find((h) => h.id === storedId);
-
-      if (found) {
-        setActiveHouseholdState(found);
-      } else if (response.data.length > 0) {
-        setActiveHouseholdState(response.data[0]);
-        localStorage.setItem('active_household_id', response.data[0].id);
+      if (response.data && response.data.length > 0) {
+        setHouseholds(response.data);
+        const storedId = localStorage.getItem('active_household_id');
+        const found = response.data.find((h) => h.id === storedId);
+        if (found) {
+          setActiveHouseholdState(found);
+        } else {
+          setActiveHouseholdState(response.data[0]);
+          localStorage.setItem('active_household_id', response.data[0].id);
+        }
       } else {
-        setActiveHouseholdState(null);
+        setHouseholds([DEV_HOUSEHOLD]);
+        setActiveHouseholdState(DEV_HOUSEHOLD);
       }
     } catch {
-      setHouseholds([]);
-      setActiveHouseholdState(null);
+      setHouseholds([DEV_HOUSEHOLD]);
+      setActiveHouseholdState(DEV_HOUSEHOLD);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchHouseholds();
-    } else {
-      setHouseholds([]);
-      setActiveHouseholdState(null);
-    }
+    fetchHouseholds();
   }, [isAuthenticated]);
 
   const setActiveHousehold = (household: Household) => {
@@ -59,14 +68,18 @@ export const HouseholdProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     localStorage.setItem('active_household_id', household.id);
   };
 
+  const refreshHouseholds = async () => {
+    await fetchHouseholds();
+  };
+
   return (
     <HouseholdContext.Provider
       value={{
         households,
-        activeHousehold,
+        activeHousehold: activeHousehold || DEV_HOUSEHOLD,
         isLoading,
         setActiveHousehold,
-        refreshHouseholds: fetchHouseholds,
+        refreshHouseholds,
       }}
     >
       {children}
