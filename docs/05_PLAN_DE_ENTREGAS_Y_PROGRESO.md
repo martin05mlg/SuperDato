@@ -31,8 +31,8 @@ gantt
 | **Fase 1: Base Técnica** | Configuración de arquitectura, Docker Compose, FastAPI, SQLAlchemy 2.0 async, Alembic, React + TypeScript scaffolding, documentación base. | **COMPLETADA** | 100% |
 | **Fase 1.5: Conexión E2E de Tickets** | Integración del extractor determinista con la API REST (`/receipts`, `/analytics`), visualización en tiempo real en la web, gráficas interactivas Recharts y subida manual de PDFs. | **COMPLETADA** | 100% |
 | **Fase 2: Usuarios y Casas** | Registro, login JWT, roles (Owner, Admin, Member), invitaciones, aislamiento estricto de datos en servidor y gestión de hogares. | **COMPLETADA** | 100% |
-| **Fase 3: Gmail e Importación** | OAuth 2.0 Google, escaneo de buzón, deduplicación por huella digital, tareas periódicas Celery y reintentos. | **SIGUIENTE** | 0% |
-| **Fase 4: Histórico y Catálogo** | Desglose de líneas y fiscalidad IVA, normalización de productos, categorías, histórico de precios inmutables. | **PENDIENTE** | 0% |
+| **Fase 3: Gmail e Importación** | OAuth 2.0 Google, tokens cifrados AES-256, deduplicación por huella digital, tareas Celery/Beat y monitor de importaciones en la web. | **COMPLETADA** | 100% |
+| **Fase 4: Histórico y Catálogo** | Desglose de líneas y fiscalidad IVA, normalización de productos, categorías, histórico de precios inmutables. | **SIGUIENTE** | 0% |
 | **Fase 5: Dashboard y Analítica** | Consultas agregadas SQL, KPIs de gasto, filtros avanzados y gráficos de series temporales. | **PENDIENTE** | 0% |
 | **Fase 6: Estabilización y QA** | Batería de pruebas con `pytest`, validación con tickets reales, optimización de Docker Compose y guía de despliegue. | **PENDIENTE** | 0% |
 
