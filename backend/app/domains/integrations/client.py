@@ -18,7 +18,7 @@ GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
 ]
 
-MERCADONA_GMAIL_QUERY = "from:(tickets@mercadona.es OR no-reply@mercadona.es OR factura@mercadona.es) has:attachment filename:pdf"
+MERCADONA_GMAIL_QUERY = "(from:mercadona OR from:mail.mercadona.com OR subject:mercadona) has:attachment filename:pdf"
 
 
 class GoogleOAuthClient:
@@ -141,7 +141,7 @@ class GoogleOAuthClient:
         async with httpx.AsyncClient(timeout=20.0) as client:
             res = await client.get(
                 GMAIL_MESSAGES_URL,
-                params={"q": q, "maxResults": 50},
+                params={"q": q, "maxResults": 100},
                 headers={"Authorization": f"Bearer {access_token}"},
             )
 

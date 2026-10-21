@@ -74,17 +74,18 @@ async def _async_sync_connection(connection_id_str: str) -> Dict[str, Any]:
 
                     stream = io.BytesIO(pdf_bytes)
                     extracted = PDFReceiptExtractor.extract_from_stream(stream)
-                    
-                    # Deduplication check
-                    dedup_hash = extracted["deduplication_hash"]
-                    existing = [r for r in ReceiptService.get_all_receipts() if r.get("deduplication_hash") == dedup_hash]
 
-                    if existing:
-                        job.receipts_skipped += 1
-                    else:
-                        # Save receipt
-                        ReceiptService.process_and_save_pdf(io.BytesIO(pdf_bytes), f"mercadona_{msg_id}.pdf")
+                    # Save to DB & memory with deduplication check
+                    saved = await ReceiptService.save_extracted_receipt_to_db(
+                        db=db,
+                        extracted=extracted,
+                        household_id=conn.household_id,
+                        import_job_id=job.id,
+                    )
+                    if saved:
                         job.receipts_imported += 1
+                    else:
+                        job.receipts_skipped += 1
 
                 except Exception as ex:
                     job.errors_count += 1

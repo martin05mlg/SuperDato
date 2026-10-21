@@ -176,8 +176,22 @@ async def trigger_manual_sync(
     membership: HouseholdMembership = Depends(require_household_permission(Permission.UPLOAD_RECEIPTS)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Manually triggers a synchronization of tickets for this household."""
-    # Create manual import job
+    """Manually triggers a synchronization of tickets from connected Gmail account or fallback."""
+    query = select(GoogleAccountConnection).where(
+        GoogleAccountConnection.household_id == household_id
+    )
+    res = await db.execute(query)
+    conn = res.scalar_one_or_none()
+
+    if conn:
+        from app.domains.integrations.tasks import _async_sync_connection
+        sync_result = await _async_sync_connection(str(conn.id))
+        job_id = uuid.UUID(sync_result["job_id"])
+        job = await db.get(ImportJob, job_id)
+        if job:
+            return job
+
+    # Fallback when no Google account is connected
     job = ImportJob(
         household_id=household_id,
         source_type="GMAIL_MANUAL",

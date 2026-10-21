@@ -193,6 +193,141 @@ class ReceiptService:
                 print(f"Error syncing {pdf_path} to DB: {e}")
 
     @staticmethod
+    async def save_extracted_receipt_to_db(
+        db: AsyncSession,
+        extracted: Dict[str, Any],
+        household_id: uuid.UUID,
+        import_job_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Receipt]:
+        """Saves an extracted receipt to database, preventing duplicates, linking catalog and price observations."""
+        dedup_hash = extracted.get("deduplication_hash")
+        if not dedup_hash:
+            return None
+
+        # Check deduplication
+        existing_stmt = select(Receipt).where(Receipt.deduplication_hash == dedup_hash)
+        res_existing = await db.execute(existing_stmt)
+        if res_existing.scalar_one_or_none():
+            return None
+
+        # Parse datetime
+        dt_str = extracted.get("purchase_datetime")
+        if dt_str:
+            try:
+                dt = datetime.fromisoformat(dt_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                dt = datetime.now(timezone.utc)
+        else:
+            dt = datetime.now(timezone.utc)
+
+        d_str = extracted.get("purchase_date")
+        if d_str:
+            try:
+                d = date.fromisoformat(d_str)
+            except Exception:
+                d = dt.date()
+        else:
+            d = dt.date()
+
+        receipt_id = uuid.uuid4()
+        receipt = Receipt(
+            id=receipt_id,
+            household_id=household_id,
+            import_job_id=import_job_id,
+            company_name=extracted.get("company_name", "MERCADONA, S.A."),
+            company_cif=extracted.get("company_cif", "A-46103834"),
+            store_address=extracted.get("store_address"),
+            store_postal_code=extracted.get("store_postal_code"),
+            store_city=extracted.get("store_city"),
+            store_code=extracted.get("store_code"),
+            pos_register=extracted.get("pos_register"),
+            invoice_number=extracted.get("invoice_number", "UNKNOWN"),
+            purchase_datetime=dt,
+            purchase_date=d,
+            purchase_time=extracted.get("purchase_time", "12:00"),
+            total_amount=extracted.get("total_amount", 0.0),
+            discounts_total=extracted.get("discounts_total", 0.0),
+            payment_method=extracted.get("payment_method"),
+            card_last_four=extracted.get("card_last_four"),
+            deduplication_hash=dedup_hash,
+            status="PROCESSED",
+            extraction_warnings=extracted.get("extraction_warnings", []),
+            is_manual_override=False,
+        )
+        db.add(receipt)
+        await db.flush()
+
+        for tax in extracted.get("tax_lines", []):
+            tax_line = ReceiptTaxLine(
+                id=uuid.uuid4(),
+                receipt_id=receipt.id,
+                tax_rate_percent=tax.get("tax_rate_percent", 0.0),
+                taxable_base=tax.get("taxable_base", 0.0),
+                tax_amount=tax.get("tax_amount", 0.0),
+                total_with_tax=tax.get("total_with_tax", 0.0),
+            )
+            db.add(tax_line)
+
+        for item in extracted.get("lines", []):
+            product = await CatalogService.get_or_create_product_for_line(
+                db=db,
+                raw_description=item.get("raw_description", ""),
+                category_hint=item.get("category_name"),
+                unit_of_measure=item.get("unit_of_measure", "ud"),
+                weight_in_kg=item.get("weight_in_kg"),
+            )
+
+            line_id = uuid.uuid4()
+            line = ReceiptLine(
+                id=line_id,
+                receipt_id=receipt.id,
+                line_order=item.get("line_order", 1),
+                raw_description=item.get("raw_description", ""),
+                product_id=product.id,
+                quantity=item.get("quantity", 1.0),
+                unit_of_measure=item.get("unit_of_measure", "ud"),
+                unit_price=item.get("unit_price", 0.0),
+                discount_amount=item.get("discount_amount", 0.0),
+                line_total=item.get("line_total", 0.0),
+                is_weighed_item=item.get("is_weighed_item", False),
+                weight_in_kg=item.get("weight_in_kg"),
+                validation_status="VALID",
+                is_manual_override=False,
+            )
+            db.add(line)
+            await db.flush()
+
+            price_kg_l = item.get("unit_price") if item.get("is_weighed_item") else None
+            await CatalogService.record_price_observation(
+                db=db,
+                household_id=household_id,
+                product_id=product.id,
+                receipt_line_id=line.id,
+                observed_at=dt,
+                observed_date=d,
+                unit_price=item.get("unit_price", 0.0),
+                price_per_kg_or_l=price_kg_l,
+                store_code=extracted.get("store_code"),
+            )
+
+        await db.commit()
+
+        # Update in-memory cache
+        extracted_copy = dict(extracted)
+        extracted_copy["id"] = str(receipt_id)
+        extracted_copy["household_id"] = str(household_id)
+        extracted_copy["created_at"] = dt.isoformat()
+        extracted_copy["lines_count"] = len(extracted.get("lines", []))
+        for l in extracted_copy.get("lines", []):
+            if "id" not in l:
+                l["id"] = str(uuid.uuid4())
+        _RECEIPTS_STORE[str(receipt_id)] = extracted_copy
+
+        return receipt
+
+    @staticmethod
     def get_all_receipts() -> List[Dict]:
         load_initial_samples_if_empty()
         receipts = list(_RECEIPTS_STORE.values())
