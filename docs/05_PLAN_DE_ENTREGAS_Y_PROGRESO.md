@@ -51,9 +51,31 @@ gantt
 | **7. Consulta y corrección manual de tickets** | Fase 4 | Vista de detalle de ticket, formulario de edición con flag `is_manual_override` y `MANUALLY_EDITED` para proteger cambios. | **Verificado** |
 | **8. Histórico disponible y persistente entre sesiones** | Fase 4 | Persistencia relacional en base de datos, catálogo de productos canónicos y observaciones de precios inmutables. | **Verificado** |
 | **9. Dashboard con estadísticas de datos reales** | Fase 5 | Consultas agregadas nativas SQL sobre tickets de la casa activa; KPIs numéricos, variación MoM, Top productos y gráficas interactivas con Recharts. | **Verificado** |
-| **10. Coherencia en los filtros del dashboard** | Fase 5 | Filtro global por rango de fechas (Histórico, 30 días, Este mes, Mes anterior, Año actual) aplicado sincrónicamente a todos los gráficos y KPIs. | **Verificado** |
+| **10. Coherencia en los filtros del dashboard** | Fase 5 | Filtro global por rango de fechas (Histórico, 30 días, Este mes, Mes anterior, Año actual y selector personalizado por calendario con fechas Desde/Hasta) aplicado sincrónicamente a todos los gráficos y KPIs. | **Verificado** |
 | **11. Aislamiento total entre casas ajenas** | Fase 2 | Tests de seguridad que verifican que un usuario sin membresía recibe HTTP 403 / 404 al acceder a datos de otra casa. | **Verificado** |
 | **12. Consulta y recuperación de errores de importación** | Fase 3 | Vista de monitor de importaciones (`import_jobs`) y botón de reintento de procesamiento. | **Verificado** |
 | **13. Suite de pruebas automáticas aprobada** | Fase 6 | 20 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **Verificado** |
 | **14. Documentación completa de instalación y uso** | Fase 6 | Documentos Markdown en `docs/` y archivo `README.md` con instrucciones de arranque con Docker. | **Verificado** |
+
+---
+
+## 4. Estado de Validación Operativa y Datos en Caliente
+
+A fecha actual, el entorno de desarrollo y pruebas se encuentra totalmente estabilizado y operando sobre datos reales de tickets de Mercadona:
+
+1. **Ingestión Real de Tickets**:
+   - **19 tickets procesados y persistidos** bajo el hogar activo unificado (`00000000-0000-0000-0000-000000000002`).
+   - Sincronización OAuth 2.0 con Gmail operativa escaneando remitente oficial de Mercadona y descargando adjuntos PDF.
+   - Conciliación contable exacta al céntimo (0.00 € de discrepancia) en líneas de producto, IVA desglosado (4%, 10%, 21%) e importe total.
+
+2. **Dashboard y Analítica Avanzada**:
+   - Selector temporal con presets dinámicos y **filtro nativo por calendario personalizado** (`Desde` y `Hasta`) con reactividad inmediata sobre TanStack Query.
+   - Cálculo preciso de variación MoM con respecto a periodos homólogos equivalentes.
+   - Tarjeta de **Última Compra** con visualización unificada de fecha (`2026-10-16`) y hora de compra en caja (`11:46:00`).
+   - Gráfica temporal interactiva con Recharts y desglose porcentual por categorías asignadas a la paleta oficial.
+
+3. **Frontend & UX**:
+   - Identidad visual completa: Favicon oficial en SVG de SuperDato, título contextual en pestaña de navegador (`SuperDato — Mercadona Ticket Tracker`) y tema esmeralda.
+   - Modal de detalle y edición de tickets con visualización de líneas de producto y líneas fiscales de IVA.
+
 

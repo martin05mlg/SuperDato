@@ -57,8 +57,14 @@ Diseñada para hogares y usuarios particulares, permite conocer los hábitos de 
 
 4. **Arrancar el servidor de desarrollo**:
    ```bash
-   cd backend
-   uvicorn app.main:app --reload --port 8000
+   # Con SQLite local rápido (desarrollo autónomo):
+   # Windows PowerShell:
+   $env:DATABASE_URL="sqlite+aiosqlite:///./superdato_dev.db"
+   python -m uvicorn app.main:app --app-dir backend --reload --port 8000
+
+   # Linux / macOS:
+   export DATABASE_URL="sqlite+aiosqlite:///./superdato_dev.db"
+   python -m uvicorn app.main:app --app-dir backend --reload --port 8000
    ```
 
 ### Frontend
@@ -72,6 +78,21 @@ Diseñada para hogares y usuarios particulares, permite conocer los hábitos de 
    ```bash
    npm run dev
    ```
+   Accede a la aplicación en [http://localhost:5173](http://localhost:5173).
+
+---
+
+## 🌟 Funcionalidades Implementadas
+
+- 📥 **Sincronización con Gmail y Subida Manual**: Integración directa con Google OAuth 2.0 (filtro oficial `from:mercadona.es`), extracción de PDFs y subida por Drag & Drop.
+- 🧮 **Conciliación Contable Estricta**: Comprobación matemática exacta (0.00 € discrepancia) entre líneas de artículos, base imponible, cuotas de IVA (4%, 10%, 21%) y total del ticket.
+- 📊 **Dashboard Analítico Reactivo**:
+  - Filtro por intervalos predeterminados y **selector nativo por calendario personalizado** (`Desde` y `Hasta`).
+  - Gasto acumulado, variación MoM con periodos homólogos, ticket medio y fecha/hora exacta de última compra.
+  - Gráficos interactivos de evolución temporal de gasto y desglose por categorías (Recharts).
+  - Tabla de Top productos y detalle de compras recientes.
+- 🏷️ **Catálogo y Precios Inmutables**: Normalización inteligente de nombres de productos, categorización visual y seguimiento de precios a lo largo del tiempo.
+- 🔒 **Aislamiento Multi-Hogar y Seguridad**: Permisos RBAC (`Owner`, `Admin`, `Member`), contraseñas con Argon2id y tokens OAuth cifrados con AES-256.
 
 ---
 

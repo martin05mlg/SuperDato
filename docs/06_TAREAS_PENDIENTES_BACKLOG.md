@@ -65,16 +65,16 @@ Este documento desglosa todas las tareas técnicas del proyecto SuperDato por do
   - Top productos ordenados por importe acumulado y por frecuencia de compra.
 - [x] **TSK-502 (P0)**: Crear endpoints de analítica (`/api/v1/analytics/...`) con soporte de filtros dinámicos por rango de fechas (últimos 30 días, mes actual, año actual, rango personalizado).
 - [x] **TSK-503 (P0)**: Implementar componentes visuales en React:
-  - Tarjetas de KPIs numéricos (Gasto total, Variación MoM, Ticket medio, Total compras).
+  - Tarjetas de KPIs numéricos (Gasto total, Variación MoM, Ticket medio, Mediana y Última Compra con fecha y hora exacta).
   - Gráfica interactiva de evolución de gasto temporal (Recharts AreaChart / BarChart).
   - Gráfica de distribución de gasto por categorías (Recharts PieChart con tooltip interactivo).
-  - Tabla de Top productos y desglose de tickets recientes.
-  - Selector global de rango de fechas sincronizado con TanStack Query en el Dashboard.
+  - Tabla de Top productos y desglose de tickets recientes con acceso directo al modal de detalle.
+  - Selector global de rango de fechas sincronizado con TanStack Query en el Dashboard, incluyendo selector interactivo por calendario nativo (fechas Desde/Hasta) y presets rápidos.
 
 ---
 
 ### Dominio 6: Frontend SPA y Experiencia de Usuario (Fases 1 a 5)
-- [x] **TSK-601 (P0)**: Crear layout principal con barra lateral, navegación responsiva y selector desplegable de Hogar activo.
+- [x] **TSK-601 (P0)**: Crear layout principal con barra lateral, navegación responsiva, selector desplegable de Hogar activo, identidad de marca SuperDato, favicon SVG y título de pestaña optimizado.
 - [x] **TSK-602 (P0)**: Desarrollar vista de autenticación y perfil (`SettingsPage.tsx`).
 - [x] **TSK-603 (P0)**: Desarrollar vista de Listado de Tickets con filtros, badges de estado y subida de archivos PDF.
 - [x] **TSK-604 (P0)**: Desarrollar vista de Detalle y Edición de Ticket (`ReceiptDetailModal.tsx`) con corrección de líneas en caliente y desglose de IVA.
