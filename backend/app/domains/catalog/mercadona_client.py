@@ -99,6 +99,108 @@ class MercadonaStorefrontClient:
             return products
 
     @classmethod
+    async def fetch_and_save_product_by_id(
+        cls,
+        db: AsyncSession,
+        product_id: str,
+        warehouse_code: str = DEFAULT_WAREHOUSE,
+    ) -> Optional[MercadonaOnlineProduct]:
+        """Fetches a specific product from Mercadona API by its ID, checking fallback warehouses if needed."""
+        clean_id = str(product_id).strip()
+        warehouses_to_try = [warehouse_code]
+        for fallback in ["mad1", "vlc1", "bcn1", "sev1", "alc1"]:
+            if fallback not in warehouses_to_try:
+                warehouses_to_try.append(fallback)
+
+        p = None
+        used_wh = warehouse_code
+
+        async with httpx.AsyncClient(headers=HEADERS, timeout=10.0) as client:
+            for wh in warehouses_to_try:
+                url = f"{MERCADONA_API_BASE}/products/{clean_id}/?lang=es&wh={wh}"
+                try:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        p = resp.json()
+                        used_wh = wh
+                        break
+                except Exception as e:
+                    logger.debug(f"Warehouse {wh} failed for product {clean_id}: {e}")
+                    continue
+
+        if not p:
+            return None
+
+        try:
+            display_name = p.get("display_name", "").strip()
+            if not display_name:
+                return None
+
+            price_info = p.get("price_instructions", {})
+            unit_p = None
+            if price_info.get("unit_price"):
+                try:
+                    unit_p = float(price_info.get("unit_price"))
+                except Exception:
+                    unit_p = None
+
+            ref_p = None
+            if price_info.get("reference_price"):
+                try:
+                    ref_p = float(price_info.get("reference_price"))
+                except Exception:
+                    ref_p = None
+
+            brand = cls.extract_brand(display_name)
+            now = datetime.now(timezone.utc)
+
+            existing_stmt = select(MercadonaOnlineProduct).where(MercadonaOnlineProduct.id == clean_id)
+            res = await db.execute(existing_stmt)
+            existing = res.scalar_one_or_none()
+
+            share_url = p.get("share_url") or f"https://tienda.mercadona.es/product/{clean_id}"
+
+            if existing:
+                existing.display_name = display_name
+                existing.slug = p.get("slug", "")
+                existing.brand = brand
+                existing.packaging = p.get("packaging")
+                existing.thumbnail_url = p.get("thumbnail", "")
+                existing.share_url = share_url
+                existing.unit_price = unit_p
+                existing.reference_price = ref_p
+                existing.reference_format = price_info.get("reference_format")
+                existing.warehouse_code = used_wh
+                existing.raw_payload = p
+                existing.last_synced_at = now
+                m_prod = existing
+            else:
+                m_prod = MercadonaOnlineProduct(
+                    id=clean_id,
+                    display_name=display_name,
+                    slug=p.get("slug", ""),
+                    brand=brand,
+                    packaging=p.get("packaging"),
+                    thumbnail_url=p.get("thumbnail", ""),
+                    share_url=share_url,
+                    unit_price=unit_p,
+                    reference_price=ref_p,
+                    reference_format=price_info.get("reference_format"),
+                    category_path="Búsqueda Directa",
+                    warehouse_code=used_wh,
+                    raw_payload=p,
+                    last_synced_at=now,
+                )
+                db.add(m_prod)
+
+            await db.commit()
+            await db.refresh(m_prod)
+            return m_prod
+        except Exception as e:
+            logger.warning(f"Error saving product {clean_id} directly from Mercadona: {e}")
+            return None
+
+    @classmethod
     async def sync_catalog_to_db(
         cls,
         db: AsyncSession,
@@ -201,7 +303,7 @@ class MercadonaStorefrontClient:
 
                 await db.commit()
                 # Friendly pause to be polite with Mercadona CDN/API
-                await asyncio.sleep(0.08)
+                await asyncio.sleep(0.02)
 
             except Exception as e:
                 logger.warning(f"Error syncing subcategory {sub_id} ({sub_info['name']}): {e}")

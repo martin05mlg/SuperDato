@@ -311,3 +311,77 @@ async def test_mercadona_api_manual_binding_and_search(client: AsyncClient, db_s
     assert rejected_data["image_url"] is None
 
 
+@pytest.mark.asyncio
+async def test_intelligent_categorizer_and_persistence(client: AsyncClient, db_session: AsyncSession):
+    """
+    Tests:
+    1. Intelligent classification heuristics for vegetables, fish, meats, dairy, bread, etc.
+    2. POST /catalog/recategorize-all endpoint.
+    3. Product category update persistence across alias lookups.
+    """
+    from app.domains.catalog.categorizer import classify_product
+
+    # 1. Direct categorizer tests
+    assert classify_product("BORRAJA") == "frutas-y-verduras"
+    assert classify_product("ACELGA LIMPIA") == "frutas-y-verduras"
+    assert classify_product("CARDO TROCEADO") == "frutas-y-verduras"
+    assert classify_product("MERLUZA FILETES") == "pescaderia"
+    assert classify_product("PECHUGA POLLO") == "carniceria-y-charcuteria"
+    assert classify_product("CHORIZO EXTRA") == "carniceria-y-charcuteria"
+    assert classify_product("LECHE ENTERA 1L") == "lacteos-y-huevos"
+    assert classify_product("QUESO LONCHAS GOUDA") == "lacteos-y-huevos"
+    assert classify_product("PAN BARRA INTEGRAL") == "panaderia-y-pasteleria"
+    assert classify_product("ARROZ REDONDO") == "despensa-y-conservas"
+    assert classify_product("CERVEZA RADLER") == "bebidas-y-refrescos"
+    assert classify_product("DETERGENTE LAVADORA") == "limpieza-y-hogar"
+
+    # 2. Database recategorize-all endpoint
+    cat = await CatalogService.ensure_system_categories(db_session)
+    otros_cat = cat["otros"]
+
+    # Create a product forced into 'otros'
+    sample_prod = Product(
+        id=uuid.uuid4(),
+        canonical_name="Cardo Troceado",
+        category_id=otros_cat.id,
+        default_unit="ud",
+    )
+    db_session.add(sample_prod)
+    db_session.add(ProductAlias(
+        id=uuid.uuid4(),
+        product_id=sample_prod.id,
+        raw_name_normalized="CARDO TROCEADO",
+        source="MERCADONA",
+        is_verified=False,
+    ))
+    await db_session.commit()
+
+    # Call /api/v1/catalog/recategorize-all
+    recat_res = await client.post("/api/v1/catalog/recategorize-all?only_otros=true")
+    assert recat_res.status_code == 200
+    recat_data = recat_res.json()
+    assert recat_data["status"] == "success"
+    assert recat_data["recategorized_count"] >= 1
+
+    # Verify sample_prod was recategorized to Frutas y Verduras
+    await db_session.refresh(sample_prod)
+    assert sample_prod.category_id == cat["frutas-y-verduras"].id
+
+    # 3. User manual edit persistence
+    # Suppose user manually changes it to 'platos-preparados'
+    update_res = await client.patch(f"/api/v1/catalog/products/{sample_prod.id}", json={
+        "category_id": str(cat["platos-preparados"].id),
+    })
+    assert update_res.status_code == 200
+    assert update_res.json()["category_name"] == "Platos Preparados"
+
+    # 4. Verify future receipt purchase with same alias keeps the user's category
+    resolved_prod = await CatalogService.get_or_create_product_for_line(
+        db=db_session,
+        raw_description="CARDO TROCEADO",
+    )
+    assert resolved_prod.id == sample_prod.id
+    assert resolved_prod.category_id == cat["platos-preparados"].id
+
+
+

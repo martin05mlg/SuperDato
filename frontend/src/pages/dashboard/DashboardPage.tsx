@@ -500,14 +500,28 @@ export const DashboardPage: React.FC = () => {
                 topProducts.map((p, idx) => (
                   <div key={p.product_id || p.product_name} className="py-3 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 font-bold text-xs flex items-center justify-center">
-                        #{idx + 1}
-                      </div>
+                      {p.image_url ? (
+                        <img
+                          src={p.image_url}
+                          alt={p.product_name}
+                          className="w-8 h-8 rounded-lg object-contain border border-slate-200 bg-white p-0.5 shrink-0"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 font-bold text-xs flex items-center justify-center shrink-0">
+                          #{idx + 1}
+                        </div>
+                      )}
                       <div>
                         <h4 className="text-xs font-semibold text-slate-900 truncate max-w-[180px] sm:max-w-[240px]">
-                          {p.product_name}
+                          {p.enriched_name || p.product_name}
                         </h4>
                         <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
+                          {p.brand && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700">
+                              {p.brand}
+                            </span>
+                          )}
                           <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">
                             {p.category_name}
                           </span>

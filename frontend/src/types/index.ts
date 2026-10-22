@@ -186,6 +186,7 @@ export interface MercadonaSuggestionItem {
   candidates: Array<{
     mercadona_product: MercadonaOnlineProduct;
     score: number;
+    price_match?: boolean;
   }>;
 }
 
@@ -250,4 +251,7 @@ export interface TopProductItem {
   total_quantity: number;
   purchases_count: number;
   average_price: number;
+  image_url?: string | null;
+  enriched_name?: string | null;
+  brand?: string | null;
 }

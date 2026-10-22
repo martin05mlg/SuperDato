@@ -133,7 +133,9 @@ class CatalogService:
                         break
 
             if not category:
-                category = categories.get("otros") or list(categories.values())[0]
+                from app.domains.catalog.categorizer import classify_product
+                inferred_slug = classify_product(canonical_name, [raw_description])
+                category = categories.get(inferred_slug) or categories.get("otros") or list(categories.values())[0]
 
             default_unit = "kg" if weight_in_kg or unit_of_measure == "kg" else "ud"
 

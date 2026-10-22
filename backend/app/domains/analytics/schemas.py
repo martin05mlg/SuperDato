@@ -38,4 +38,7 @@ class TopProductResponse(BaseModel):
     total_quantity: float
     purchases_count: int
     average_price: float
+    image_url: Optional[str] = None
+    enriched_name: Optional[str] = None
+    brand: Optional[str] = None
 

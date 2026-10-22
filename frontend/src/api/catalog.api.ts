@@ -99,10 +99,14 @@ export const catalogApi = {
     return res.data;
   },
 
-  confirmMercadonaMatch: async (productId: string, mercadonaOnlineId: string): Promise<Product> => {
+  confirmMercadonaMatch: async (
+    productId: string,
+    params: { mercadonaOnlineId?: string; urlOrId?: string }
+  ): Promise<Product> => {
     const res = await apiClient.post<Product>('/catalog/mercadona/confirm-match', {
       product_id: productId,
-      mercadona_online_id: mercadonaOnlineId,
+      mercadona_online_id: params.mercadonaOnlineId,
+      url_or_id: params.urlOrId,
     });
     return res.data;
   },
@@ -117,6 +121,13 @@ export const catalogApi = {
   searchMercadonaOnline: async (query: string): Promise<MercadonaOnlineProduct[]> => {
     const res = await apiClient.get<MercadonaOnlineProduct[]>('/catalog/mercadona/search', {
       params: { query },
+    });
+    return res.data;
+  },
+
+  recategorizeAll: async (onlyOtros: boolean = true) => {
+    const res = await apiClient.post('/catalog/recategorize-all', null, {
+      params: { only_otros: onlyOtros },
     });
     return res.data;
   },

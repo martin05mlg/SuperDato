@@ -292,10 +292,15 @@ async def get_mercadona_suggestions(
     db: AsyncSession = Depends(get_db),
 ):
     """Returns products that have moderate-confidence matching suggestions (score 0.50 - 0.84) or are unenriched."""
+    # Pre-load candidate pool once for high performance
+    online_stmt = select(MercadonaOnlineProduct)
+    online_res = await db.execute(online_stmt)
+    all_online = online_res.scalars().all()
+
     stmt = (
         select(Product)
         .where(
-            (Product.enrichment_status != "MANUALLY_CONFIRMED")
+            (Product.enrichment_status.notin_(["AUTO", "MANUALLY_CONFIRMED"]))
             | (Product.enrichment_status.is_(None))
         )
         .options(
@@ -303,7 +308,6 @@ async def get_mercadona_suggestions(
             selectinload(Product.aliases),
             selectinload(Product.price_observations),
         )
-        .limit(limit_products)
     )
     res = await db.execute(stmt)
     products = res.scalars().all()
@@ -312,7 +316,13 @@ async def get_mercadona_suggestions(
     for p in products:
         obs_list = sorted(p.price_observations, key=lambda o: o.observed_at)
         latest_price = float(obs_list[-1].unit_price) if obs_list else None
-        candidates = await MercadonaMatcherService.find_matches_for_product(db, p, reference_price=latest_price, limit=4)
+        candidates = await MercadonaMatcherService.find_matches_for_product(
+            db,
+            p,
+            reference_price=latest_price,
+            candidate_pool=all_online,
+            limit=4,
+        )
         if candidates:
             items.append({
                 "product": format_product_dict(p, obs_list=obs_list),
@@ -320,10 +330,17 @@ async def get_mercadona_suggestions(
                     {
                         "mercadona_product": c[0],
                         "score": c[1],
+                        "price_match": bool(
+                            latest_price
+                            and c[0].unit_price
+                            and abs(float(latest_price) - float(c[0].unit_price)) <= 0.05
+                        ),
                     }
                     for c in candidates
                 ],
             })
+            if len(items) >= limit_products:
+                break
     return items
 
 
@@ -332,11 +349,35 @@ async def confirm_match(
     data: MercadonaConfirmMatchRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Manually confirms binding between a canonical product and a Mercadona online item."""
+    """Manually confirms binding between a canonical product and a Mercadona online item via ID or URL."""
+    import re
+    from app.domains.catalog.mercadona_client import MercadonaStorefrontClient
+    from app.domains.receipts.models import ReceiptLine
+
     try:
         p_uuid = uuid.UUID(data.product_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID de producto inválido")
+
+    # Determine target Mercadona Online product ID
+    target_online_id = None
+    if data.mercadona_online_id and data.mercadona_online_id.strip():
+        target_online_id = data.mercadona_online_id.strip()
+    elif data.url_or_id and data.url_or_id.strip():
+        raw_val = data.url_or_id.strip()
+        url_match = re.search(r"/product/(\d+)", raw_val)
+        if url_match:
+            target_online_id = url_match.group(1)
+        else:
+            digit_match = re.search(r"(\d{3,8})", raw_val)
+            if digit_match:
+                target_online_id = digit_match.group(1)
+
+    if not target_online_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe proporcionar un ID o URL válida de Mercadona Online (ej: https://tienda.mercadona.es/product/14344/... o 14344).",
+        )
 
     stmt = select(Product).where(Product.id == p_uuid).options(
         selectinload(Product.category),
@@ -348,12 +389,21 @@ async def confirm_match(
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
 
-    online_stmt = select(MercadonaOnlineProduct).where(MercadonaOnlineProduct.id == data.mercadona_online_id)
+    online_stmt = select(MercadonaOnlineProduct).where(MercadonaOnlineProduct.id == target_online_id)
     online_res = await db.execute(online_stmt)
     online_prod = online_res.scalar_one_or_none()
-    if not online_prod:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto de Mercadona Online no encontrado")
 
+    # If not found in local cache, fetch directly from Mercadona API
+    if not online_prod:
+        online_prod = await MercadonaStorefrontClient.fetch_and_save_product_by_id(db, target_online_id)
+
+    if not online_prod:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró el producto en Mercadona con el identificador '{target_online_id}'.",
+        )
+
+    # Bind product
     product.mercadona_online_id = online_prod.id
     product.enriched_name = online_prod.display_name
     product.image_url = online_prod.thumbnail_url
@@ -363,9 +413,48 @@ async def confirm_match(
     product.enrichment_status = "MANUALLY_CONFIRMED"
     product.enrichment_confidence = 1.0
 
+    # Auto-update category if currently 'otros' or undefined
+    if (not product.category or product.category.slug == "otros") and online_prod.category_path:
+        from app.domains.catalog.categorizer import classify_product
+        inferred_slug = classify_product(
+            product.canonical_name,
+            [a.raw_name_normalized for a in product.aliases],
+            mercadona_category_path=online_prod.category_path,
+            mercadona_display_name=online_prod.display_name,
+        )
+        if inferred_slug != "otros":
+            cat_stmt = select(Category).where(Category.slug == inferred_slug)
+            cat_res = await db.execute(cat_stmt)
+            new_cat = cat_res.scalar_one_or_none()
+            if new_cat:
+                product.category_id = new_cat.id
+
+    # Ensure aliases are verified
+    for a in product.aliases:
+        a.is_verified = True
+
+    # Propagate enriched attributes to existing receipt lines for this product
+    lines_stmt = select(ReceiptLine).where(ReceiptLine.product_id == product.id)
+    lines_res = await db.execute(lines_stmt)
+    receipt_lines = lines_res.scalars().all()
+    for rl in receipt_lines:
+        rl.enriched_name = online_prod.display_name
+        rl.image_url = online_prod.thumbnail_url
+        rl.brand = online_prod.brand
+        rl.packaging = online_prod.packaging
+
     await db.commit()
-    await db.refresh(product)
-    return format_product_dict(product)
+
+    # Re-fetch product with loaded relationships
+    re_stmt = select(Product).where(Product.id == p_uuid).options(
+        selectinload(Product.category),
+        selectinload(Product.aliases),
+        selectinload(Product.price_observations),
+    )
+    re_res = await db.execute(re_stmt)
+    fresh_product = re_res.scalar_one()
+
+    return format_product_dict(fresh_product)
 
 
 @router.post("/mercadona/reject-match", response_model=ProductResponse)
@@ -429,4 +518,76 @@ async def search_mercadona_online(
     )
     res = await db.execute(stmt)
     return res.scalars().all()
+
+
+@router.post("/recategorize-all")
+async def recategorize_all_products(
+    only_otros: bool = Query(True, description="Si es True, sólo reclasifica productos que actualmente están en 'Otros'"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Intelligently re-classifies products across system categories.
+    Uses Mercadona Online category_path if linked, or keyword heuristics otherwise.
+    """
+    from collections import Counter
+    from app.domains.catalog.categorizer import classify_product
+
+    # Ensure categories are loaded
+    categories_dict = await CatalogService.ensure_system_categories(db)
+
+    stmt = (
+        select(Product)
+        .options(
+            selectinload(Product.category),
+            selectinload(Product.aliases),
+        )
+    )
+    res = await db.execute(stmt)
+    products = res.scalars().all()
+
+    # Pre-fetch mercadona online products for those linked
+    online_ids = [p.mercadona_online_id for p in products if p.mercadona_online_id]
+    online_lookup = {}
+    if online_ids:
+        on_stmt = select(MercadonaOnlineProduct).where(MercadonaOnlineProduct.id.in_(online_ids))
+        on_res = await db.execute(on_stmt)
+        online_lookup = {item.id: item for item in on_res.scalars().all()}
+
+    recategorized_count = 0
+    counts = Counter()
+
+    for p in products:
+        current_slug = p.category.slug if p.category else "otros"
+
+        if only_otros and current_slug != "otros":
+            counts[current_slug] += 1
+            continue
+
+        online_prod = online_lookup.get(p.mercadona_online_id) if p.mercadona_online_id else None
+        cat_path = online_prod.category_path if online_prod else None
+        disp_name = online_prod.display_name if online_prod else None
+
+        alias_texts = [a.raw_name_normalized for a in p.aliases]
+        new_slug = classify_product(
+            canonical_name=p.canonical_name,
+            aliases=alias_texts,
+            mercadona_category_path=cat_path,
+            mercadona_display_name=disp_name,
+        )
+
+        target_cat = categories_dict.get(new_slug)
+        if target_cat and target_cat.id != p.category_id:
+            p.category_id = target_cat.id
+            recategorized_count += 1
+
+        counts[new_slug] += 1
+
+    await db.commit()
+
+    return {
+        "status": "success",
+        "total_products": len(products),
+        "recategorized_count": recategorized_count,
+        "distribution": dict(counts),
+    }
 

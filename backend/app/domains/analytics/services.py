@@ -11,20 +11,18 @@ from app.domains.receipts.services import ReceiptService
 
 CATEGORY_COLORS = {
     "Frutas y Verduras": "#10B981",
-    "Carnicería y Aves": "#EF4444",
+    "Carnicería y Charcutería": "#EF4444",
     "Pescadería": "#06B6D4",
-    "Lácteos y Quesos": "#F59E0B",
-    "Platos Preparados": "#8B5CF6",
-    "Bebidas": "#3B82F6",
-    "Cuidado Personal": "#EC4899",
-    "Aperitivos y Snacks": "#F97316",
-    "Alimentación General": "#6B7280",
-    "Limpieza y Hogar": "#14B8A6",
+    "Lácteos y Huevos": "#F59E0B",
     "Panadería y Pastelería": "#D97706",
-    "Congelados": "#38BDF8",
+    "Despensa y Conservas": "#6366F1",
+    "Bebidas y Refrescos": "#3B82F6",
+    "Congelados": "#8B5CF6",
+    "Limpieza y Hogar": "#14B8A6",
+    "Cuidado Personal y Perfumería": "#EC4899",
+    "Platos Preparados": "#F97316",
     "Mascotas": "#A855F7",
-    "Servicios": "#94A3B8",
-    "Otros": "#64748B",
+    "Otros": "#6B7280",
 }
 
 
@@ -294,6 +292,9 @@ class AnalyticsService:
                 func.sum(ReceiptLine.line_total).label("total_spend"),
                 func.sum(ReceiptLine.quantity).label("total_quantity"),
                 func.count(func.distinct(Receipt.id)).label("purchases_count"),
+                Product.image_url.label("image_url"),
+                Product.enriched_name.label("enriched_name"),
+                Product.brand.label("brand"),
             )
             .join(Receipt, ReceiptLine.receipt_id == Receipt.id)
             .join(Product, ReceiptLine.product_id == Product.id, isouter=True)
@@ -308,7 +309,7 @@ class AnalyticsService:
             stmt = stmt.where(Receipt.purchase_date <= end_date)
 
         stmt = (
-            stmt.group_by("prod_id", "product_name", "category_name")
+            stmt.group_by("prod_id", "product_name", "category_name", Product.image_url, Product.enriched_name, Product.brand)
             .order_by(desc("total_spend"))
             .limit(limit)
         )
@@ -334,6 +335,9 @@ class AnalyticsService:
                 "total_quantity": round(qty, 2),
                 "purchases_count": p_count,
                 "average_price": avg_p,
+                "image_url": r[6] if len(r) > 6 else None,
+                "enriched_name": r[7] if len(r) > 7 else None,
+                "brand": r[8] if len(r) > 8 else None,
             })
 
         return result

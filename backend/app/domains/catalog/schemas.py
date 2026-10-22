@@ -123,6 +123,7 @@ class MercadonaEnrichResponse(BaseModel):
 class MercadonaCandidateItem(BaseModel):
     mercadona_product: MercadonaOnlineProductResponse
     score: float
+    price_match: bool = False
 
 
 class MercadonaSuggestionItem(BaseModel):
@@ -132,7 +133,8 @@ class MercadonaSuggestionItem(BaseModel):
 
 class MercadonaConfirmMatchRequest(BaseModel):
     product_id: str
-    mercadona_online_id: str
+    mercadona_online_id: Optional[str] = None
+    url_or_id: Optional[str] = None
 
 
 class MercadonaRejectMatchRequest(BaseModel):

@@ -17,13 +17,12 @@ from app.domains.catalog.matcher import MercadonaMatcherService
 
 async def main():
     async with async_session_maker() as db:
-        print("==> 1. Downloading Mercadona Online storefront categories & products for zar1...")
-        # Syncing first 15 subcategories
-        sync_res = await MercadonaStorefrontClient.sync_catalog_to_db(db, warehouse_code="zar1", limit_subcategories=25)
+        print("==> 1. Downloading FULL Mercadona Online storefront categories & products for zar1...")
+        sync_res = await MercadonaStorefrontClient.sync_catalog_to_db(db, warehouse_code="zar1", limit_subcategories=None)
         print("Sync summary:", sync_res)
 
         print("\n==> 2. Running fuzzy matching and auto-enrichment for household products...")
-        enrich_res = await MercadonaMatcherService.enrich_all_household_products(db, auto_threshold=0.82)
+        enrich_res = await MercadonaMatcherService.enrich_all_household_products(db, auto_threshold=0.75)
         print("Enrichment summary:", enrich_res)
 
 
