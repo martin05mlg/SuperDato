@@ -53,6 +53,7 @@ ROLE_PERMISSIONS = {
         Permission.DELETE_RECEIPTS,
         Permission.VIEW_ANALYTICS,
         Permission.MANAGE_MEMBERS,
+        Permission.MANAGE_HOUSEHOLD,
         Permission.CONNECT_INTEGRATIONS,
     },
     Role.MEMBER: {
@@ -75,11 +76,12 @@ async def get_current_user(
             if not dev_user:
                 dev_user = User(
                     id=DEV_USER_ID,
-                    email="dev@superdato.local",
+                    email="dev@superdato.es",
                     hashed_password="mock_dev_password",
                     full_name="Usuario Desarrollo",
                     is_active=True,
                     is_verified=True,
+                    is_superuser=True,
                 )
                 db.add(dev_user)
                 await db.commit()
@@ -134,6 +136,18 @@ async def get_current_user(
         )
 
     return user
+
+
+async def require_superuser(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Dependency that ensures the authenticated user has superuser privileges."""
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios de Superadministrador.",
+        )
+    return current_user
 
 
 def require_household_permission(required_permission: Permission):

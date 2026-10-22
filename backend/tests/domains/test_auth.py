@@ -4,11 +4,24 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_register_and_login_flow(client: AsyncClient):
-    # 1. Register User
+    # 0. Registration without or with invalid token fails
+    bad_token_res = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "carlos@ejemplo.com",
+            "password": "PasswordSegura123!",
+            "full_name": "Carlos Pérez",
+            "registration_token": "INVALID-TOKEN-999",
+        },
+    )
+    assert bad_token_res.status_code == 403
+
+    # 1. Register User with valid registration token
     reg_payload = {
         "email": "carlos@ejemplo.com",
         "password": "PasswordSegura123!",
         "full_name": "Carlos Pérez",
+        "registration_token": "TEST-TOKEN-1234",
     }
     reg_res = await client.post("/api/v1/auth/register", json=reg_payload)
     assert reg_res.status_code == 201

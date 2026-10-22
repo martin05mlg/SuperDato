@@ -11,7 +11,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.domains.auth.models import User
+from app.domains.auth.models import User, RegistrationToken
 from app.domains.auth.schemas import TokenResponse, UserLogin, UserRegister, UserResponse, UserUpdate
 from app.domains.households.models import Household, HouseholdMembership
 
@@ -28,13 +28,52 @@ class AuthService:
                 detail="Ya existe una cuenta registrada con este correo electrónico.",
             )
 
+        # Validate registration token issued by superadmin
+        token_clean = data.registration_token.strip()
+        t_stmt = select(RegistrationToken).where(RegistrationToken.token == token_clean)
+        t_res = await db.execute(t_stmt)
+        token_obj = t_res.scalar_one_or_none()
+
+        if not token_obj or not token_obj.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Token de registro no válido o inactivo. Contacta con el administrador del sistema.",
+            )
+
+        if token_obj.expires_at:
+            now_utc = datetime.now(timezone.utc)
+            exp = token_obj.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < now_utc:
+                token_obj.is_active = False
+                await db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Este token de registro ha caducado.",
+                )
+
+        if token_obj.times_used >= token_obj.max_uses:
+            token_obj.is_active = False
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Este token de registro ya ha alcanzado el límite de usos permitidos.",
+            )
+
+        # Consume token use
+        token_obj.times_used += 1
+        if token_obj.times_used >= token_obj.max_uses:
+            token_obj.is_active = False
+
         # Create user
         user = User(
             email=data.email.lower().strip(),
             hashed_password=hash_password(data.password),
             full_name=data.full_name.strip(),
             is_active=True,
-            is_verified=True,  # In MVP initial setup auto-verified
+            is_verified=True,
+            is_superuser=False,
         )
         db.add(user)
         await db.flush()

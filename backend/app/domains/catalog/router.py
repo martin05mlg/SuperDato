@@ -76,22 +76,27 @@ def format_product_dict(prod: Product, obs_list=None, category=None, aliases=Non
 
 
 @router.get("/categories", response_model=List[CategoryResponse])
-async def list_categories(db: AsyncSession = Depends(get_db)):
+async def list_categories(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar conteos por hogar"),
+    db: AsyncSession = Depends(get_db),
+):
     """Returns the full product category hierarchy with active item counts."""
-    return await CatalogService.list_categories(db)
+    return await CatalogService.list_categories(db, household_id=household_id)
 
 
 @router.get("/products", response_model=List[ProductResponse])
 async def list_products(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por ID de hogar"),
     category_id: Optional[str] = Query(None, description="Filtrar por ID de categoría"),
     search: Optional[str] = Query(None, description="Búsqueda por nombre de producto o alias"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
-    """Lists normalized canonical products with their latest observed price and inflation metrics."""
+    """Lists normalized canonical products with their latest observed price and inflation metrics for the given household."""
     return await CatalogService.list_products(
         db,
+        household_id=household_id,
         category_id=category_id,
         search=search,
         skip=skip,
@@ -288,11 +293,12 @@ async def enrich_products(
 
 @router.get("/mercadona/suggestions", response_model=List[MercadonaSuggestionItem])
 async def get_mercadona_suggestions(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar sugerencias por hogar"),
     limit_products: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns products that have moderate-confidence matching suggestions (score 0.50 - 0.84) or are unenriched."""
-    # Pre-load candidate pool once for high performance
+    """Returns products that have moderate-confidence matching suggestions (score 0.50 - 0.84) or are unenriched for the household."""
+    from app.domains.catalog.models import PriceObservation
     online_stmt = select(MercadonaOnlineProduct)
     online_res = await db.execute(online_stmt)
     all_online = online_res.scalars().all()
@@ -309,12 +315,19 @@ async def get_mercadona_suggestions(
             selectinload(Product.price_observations),
         )
     )
+    if household_id:
+        stmt = stmt.where(Product.price_observations.any(PriceObservation.household_id == household_id))
+
     res = await db.execute(stmt)
     products = res.scalars().all()
 
     items = []
     for p in products:
-        obs_list = sorted(p.price_observations, key=lambda o: o.observed_at)
+        if household_id:
+            obs_list = [o for o in p.price_observations if o.household_id == household_id]
+        else:
+            obs_list = list(p.price_observations)
+        obs_list = sorted(obs_list, key=lambda o: o.observed_at)
         latest_price = float(obs_list[-1].unit_price) if obs_list else None
         candidates = await MercadonaMatcherService.find_matches_for_product(
             db,

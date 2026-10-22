@@ -3,14 +3,6 @@ import type { Household } from '../types';
 import { apiClient } from '../api/client';
 import { useAuth } from './AuthContext';
 
-export const DEV_HOUSEHOLD: Household = {
-  id: '00000000-0000-0000-0000-000000000002',
-  name: 'Casa Principal',
-  currency: 'EUR',
-  role: 'OWNER',
-  created_at: new Date().toISOString(),
-};
-
 interface HouseholdContextType {
   households: Household[];
   activeHousehold: Household | null;
@@ -23,14 +15,14 @@ const HouseholdContext = createContext<HouseholdContextType | undefined>(undefin
 
 export const HouseholdProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  const [households, setHouseholds] = useState<Household[]>([DEV_HOUSEHOLD]);
-  const [activeHousehold, setActiveHouseholdState] = useState<Household | null>(DEV_HOUSEHOLD);
+  const [households, setHouseholds] = useState<Household[]>([]);
+  const [activeHousehold, setActiveHouseholdState] = useState<Household | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const fetchHouseholds = async () => {
     if (!isAuthenticated) {
-      setHouseholds([DEV_HOUSEHOLD]);
-      setActiveHouseholdState(DEV_HOUSEHOLD);
+      setHouseholds([]);
+      setActiveHouseholdState(null);
       return;
     }
 
@@ -48,12 +40,12 @@ export const HouseholdProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           localStorage.setItem('active_household_id', response.data[0].id);
         }
       } else {
-        setHouseholds([DEV_HOUSEHOLD]);
-        setActiveHouseholdState(DEV_HOUSEHOLD);
+        setHouseholds([]);
+        setActiveHouseholdState(null);
       }
     } catch {
-      setHouseholds([DEV_HOUSEHOLD]);
-      setActiveHouseholdState(DEV_HOUSEHOLD);
+      setHouseholds([]);
+      setActiveHouseholdState(null);
     } finally {
       setIsLoading(false);
     }
@@ -76,7 +68,7 @@ export const HouseholdProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     <HouseholdContext.Provider
       value={{
         households,
-        activeHousehold: activeHousehold || DEV_HOUSEHOLD,
+        activeHousehold,
         isLoading,
         setActiveHousehold,
         refreshHouseholds,

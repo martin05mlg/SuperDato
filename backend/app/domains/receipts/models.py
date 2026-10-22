@@ -16,9 +16,15 @@ class Receipt(Base, TimestampMixin):
         primary_key=True,
         default=uuid.uuid4,
     )
-    household_id: Mapped[uuid.UUID] = mapped_column(
+    household_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid,
-        ForeignKey("households.id", ondelete="CASCADE"),
+        ForeignKey("households.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    assignment_status: Mapped[str] = mapped_column(
+        String(30),
+        default="ASSIGNED",  # ASSIGNED, PENDING_ASSIGNMENT
         nullable=False,
         index=True,
     )

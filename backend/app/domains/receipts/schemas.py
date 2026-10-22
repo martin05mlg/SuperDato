@@ -46,7 +46,7 @@ class ReceiptTaxLineResponse(BaseModel):
 
 class ReceiptResponse(BaseModel):
     id: str
-    household_id: str
+    household_id: Optional[str] = None
     company_name: str
     company_cif: str
     store_address: Optional[str] = None
@@ -60,6 +60,7 @@ class ReceiptResponse(BaseModel):
     payment_method: Optional[str] = None
     card_last_four: Optional[str] = None
     status: str
+    assignment_status: Optional[str] = "ASSIGNED"
     extraction_warnings: List[str] = []
     is_manual_override: bool = False
     lines_count: int = 0
@@ -75,6 +76,15 @@ class ReceiptUpdate(BaseModel):
     total_amount: Optional[float] = None
     payment_method: Optional[str] = None
     status: Optional[str] = None
+
+
+class ReceiptAssignHouseholdRequest(BaseModel):
+    household_id: str
+
+
+class ReceiptBulkAssignRequest(BaseModel):
+    receipt_ids: List[str]
+    household_id: str
 
 
 class ReceiptDetailResponse(ReceiptResponse):

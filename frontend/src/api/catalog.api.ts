@@ -10,6 +10,7 @@ import type {
 } from '../types';
 
 export interface ProductFilters {
+  household_id?: string;
   category_id?: string;
   search?: string;
   skip?: number;
@@ -17,8 +18,10 @@ export interface ProductFilters {
 }
 
 export const catalogApi = {
-  getCategories: async (): Promise<Category[]> => {
-    const res = await apiClient.get<Category[]>('/catalog/categories');
+  getCategories: async (householdId?: string): Promise<Category[]> => {
+    const res = await apiClient.get<Category[]>('/catalog/categories', {
+      params: householdId ? { household_id: householdId } : undefined,
+    });
     return res.data;
   },
 
@@ -92,9 +95,12 @@ export const catalogApi = {
     return res.data;
   },
 
-  getMercadonaSuggestions: async (limitProducts?: number): Promise<MercadonaSuggestionItem[]> => {
+  getMercadonaSuggestions: async (limitProducts?: number, householdId?: string): Promise<MercadonaSuggestionItem[]> => {
     const res = await apiClient.get<MercadonaSuggestionItem[]>('/catalog/mercadona/suggestions', {
-      params: limitProducts ? { limit_products: limitProducts } : undefined,
+      params: {
+        ...(limitProducts ? { limit_products: limitProducts } : {}),
+        ...(householdId ? { household_id: householdId } : {}),
+      },
     });
     return res.data;
   },

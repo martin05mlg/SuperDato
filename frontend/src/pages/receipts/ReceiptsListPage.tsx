@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { receiptsApi } from '../../api/receipts.api';
+import { useHousehold } from '../../context/HouseholdContext';
 import type { Receipt } from '../../types';
 import { ReceiptDetailModal } from '../../components/receipts/ReceiptDetailModal';
 import {
@@ -12,22 +14,55 @@ import {
   MapPin,
   Eye,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Home,
+  Clock,
+  ArrowRight,
+  CheckCheck,
 } from 'lucide-react';
 
 export const ReceiptsListPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get('tab') === 'pending' ? 'pending' : 'household';
+
+  const { activeHousehold, households } = useHousehold();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Fetch receipts from API
-  const { data: receipts = [], isLoading } = useQuery<Receipt[]>({
-    queryKey: ['receipts'],
-    queryFn: () => receiptsApi.getAll(),
+  // Assignment states
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [rowSelectedHouseholds, setRowSelectedHouseholds] = useState<Record<string, string>>({});
+  const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
+  const [bulkTargetHousehold, setBulkTargetHousehold] = useState<string>('');
+  const [isBulkAssigning, setIsBulkAssigning] = useState(false);
+
+  // Fetch receipts scoped to active household
+  const { data: receipts = [], isLoading: isLoadingReceipts } = useQuery<Receipt[]>({
+    queryKey: ['receipts', activeHousehold?.id],
+    queryFn: () => receiptsApi.getAll({ household_id: activeHousehold?.id }),
+    enabled: currentTab === 'household',
   });
+
+  // Fetch unassigned pending receipts
+  const { data: pendingReceipts = [], isLoading: isLoadingPending } = useQuery<Receipt[]>({
+    queryKey: ['pending-receipts'],
+    queryFn: receiptsApi.getPending,
+    refetchInterval: 15000,
+  });
+
+  const pendingCount = pendingReceipts.length;
+
+  const handleTabChange = (tab: 'household' | 'pending') => {
+    if (tab === 'pending') {
+      setSearchParams({ tab: 'pending' });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   // Handle click on a receipt to view details
   const handleViewDetail = async (id: string) => {
@@ -35,7 +70,7 @@ export const ReceiptsListPage: React.FC = () => {
       setLoadingDetailId(id);
       const detail = await receiptsApi.getById(id);
       setSelectedReceipt(detail);
-    } catch (err: any) {
+    } catch {
       alert('Error al cargar el detalle del ticket.');
     } finally {
       setLoadingDetailId(null);
@@ -55,8 +90,10 @@ export const ReceiptsListPage: React.FC = () => {
     try {
       setIsUploading(true);
       setUploadError(null);
-      const newReceipt = await receiptsApi.uploadPdf(file);
+      const newReceipt = await receiptsApi.uploadPdf(file, activeHousehold?.id);
       queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-receipts-count'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
       setSelectedReceipt(newReceipt);
     } catch (err: any) {
@@ -67,7 +104,55 @@ export const ReceiptsListPage: React.FC = () => {
     }
   };
 
-  const filteredReceipts = receipts.filter((r) => {
+  // Assign single receipt to a household
+  const handleAssignSingle = async (receiptId: string) => {
+    const targetHh = rowSelectedHouseholds[receiptId] || activeHousehold?.id || (households[0] ? households[0].id : '');
+    if (!targetHh) {
+      alert('Por favor selecciona un hogar destino.');
+      return;
+    }
+
+    try {
+      setAssigningId(receiptId);
+      await receiptsApi.assignHousehold(receiptId, targetHh);
+      await queryClient.invalidateQueries({ queryKey: ['pending-receipts'] });
+      await queryClient.invalidateQueries({ queryKey: ['pending-receipts-count'] });
+      await queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      await queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al asignar el ticket al hogar.');
+    } finally {
+      setAssigningId(null);
+    }
+  };
+
+  // Bulk assign multiple receipts
+  const handleBulkAssign = async () => {
+    if (!bulkTargetHousehold) {
+      alert('Selecciona un hogar para asignar los tickets seleccionados.');
+      return;
+    }
+    if (selectedPendingIds.length === 0) return;
+
+    try {
+      setIsBulkAssigning(true);
+      await receiptsApi.bulkAssign(selectedPendingIds, bulkTargetHousehold);
+      setSelectedPendingIds([]);
+      await queryClient.invalidateQueries({ queryKey: ['pending-receipts'] });
+      await queryClient.invalidateQueries({ queryKey: ['pending-receipts-count'] });
+      await queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      await queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al asignar tickets en bloque.');
+    } finally {
+      setIsBulkAssigning(false);
+    }
+  };
+
+  const currentList = currentTab === 'household' ? receipts : pendingReceipts;
+  const isLoading = currentTab === 'household' ? isLoadingReceipts : isLoadingPending;
+
+  const filteredReceipts = currentList.filter((r) => {
     const term = searchTerm.toLowerCase();
     return (
       r.invoice_number.toLowerCase().includes(term) ||
@@ -83,7 +168,7 @@ export const ReceiptsListPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Histórico de Tickets</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Consulta, audita y desglosa los tickets digitales de Mercadona.
+            Consulta, audita y asigna los tickets digitales de Mercadona a tus hogares.
           </p>
         </div>
 
@@ -114,6 +199,96 @@ export const ReceiptsListPage: React.FC = () => {
         </div>
       )}
 
+      {/* Tabs Switcher */}
+      <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => handleTabChange('household')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            currentTab === 'household'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Home className="w-4 h-4" />
+          <span>Tickets de {activeHousehold?.name || 'este Hogar'}</span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full ${
+              currentTab === 'household'
+                ? 'bg-slate-800 text-slate-200'
+                : 'bg-slate-200 text-slate-700'
+            }`}
+          >
+            {receipts.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('pending')}
+          className={`relative flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            currentTab === 'pending'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Pendientes de Asignar</span>
+          {pendingCount > 0 ? (
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                currentTab === 'pending'
+                  ? 'bg-amber-800 text-white'
+                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+              }`}
+            >
+              {pendingCount}
+            </span>
+          ) : (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">0</span>
+          )}
+        </button>
+      </div>
+
+      {/* Pending Batch Action Bar */}
+      {currentTab === 'pending' && selectedPendingIds.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center space-x-2 text-xs font-semibold text-amber-900">
+            <CheckCheck className="w-4 h-4 text-amber-600" />
+            <span>{selectedPendingIds.length} tickets seleccionados</span>
+          </div>
+
+          <div className="flex items-center space-x-2 w-full sm:w-auto">
+            <select
+              value={bulkTargetHousehold}
+              onChange={(e) => setBulkTargetHousehold(e.target.value)}
+              className="text-xs font-medium border border-amber-300 bg-white rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="">Selecciona hogar destino...</option>
+              {households.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleBulkAssign}
+              disabled={isBulkAssigning || !bulkTargetHousehold}
+              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center space-x-1"
+            >
+              {isBulkAssigning ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <ArrowRight className="w-3.5 h-3.5" />
+              )}
+              <span>Asignar en bloque</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -128,11 +303,11 @@ export const ReceiptsListPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Loading & Error States */}
+      {/* Loading States */}
       {isLoading && (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-600 mb-2" />
-          <p className="text-sm">Cargando tickets de compra...</p>
+          <p className="text-sm">Cargando tickets...</p>
         </div>
       )}
 
@@ -143,21 +318,62 @@ export const ReceiptsListPage: React.FC = () => {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-xs uppercase tracking-wider">
                 <tr>
+                  {currentTab === 'pending' && (
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredReceipts.length > 0 &&
+                          selectedPendingIds.length === filteredReceipts.length
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPendingIds(filteredReceipts.map((r) => r.id));
+                          } else {
+                            setSelectedPendingIds([]);
+                          }
+                        }}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                    </th>
+                  )}
                   <th className="py-3 px-4">Factura</th>
                   <th className="py-3 px-4">Fecha y Hora</th>
                   <th className="py-3 px-4">Tienda / Localidad</th>
                   <th className="py-3 px-4 text-center">Artículos</th>
                   <th className="py-3 px-4 text-right">Importe Total</th>
-                  <th className="py-3 px-4 text-center">Estado</th>
+                  <th className="py-3 px-4 text-center">
+                    {currentTab === 'pending' ? 'Destino / Asignación' : 'Estado'}
+                  </th>
                   <th className="py-3 px-4 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredReceipts.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/70 transition">
+                    {currentTab === 'pending' && (
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedPendingIds.includes(r.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPendingIds([...selectedPendingIds, r.id]);
+                            } else {
+                              setSelectedPendingIds(selectedPendingIds.filter((id) => id !== r.id));
+                            }
+                          }}
+                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                        />
+                      </td>
+                    )}
                     <td className="py-3 px-4 font-bold text-slate-900">
                       <div className="flex items-center space-x-2">
-                        <ReceiptIcon className="w-4 h-4 text-emerald-600" />
+                        <ReceiptIcon
+                          className={`w-4 h-4 ${
+                            currentTab === 'pending' ? 'text-amber-600' : 'text-emerald-600'
+                          }`}
+                        />
                         <span>{r.invoice_number}</span>
                       </div>
                     </td>
@@ -170,7 +386,9 @@ export const ReceiptsListPage: React.FC = () => {
                     <td className="py-3 px-4 text-slate-600 text-xs">
                       <div className="flex items-center space-x-1.5">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                        <span className="truncate max-w-xs">{r.store_address || 'Mercadona'}, {r.store_city || ''}</span>
+                        <span className="truncate max-w-xs">
+                          {r.store_address || 'Mercadona'}, {r.store_city || ''}
+                        </span>
                       </div>
                     </td>
                     <td className="py-3 px-4 text-center text-xs font-medium text-slate-700">
@@ -179,12 +397,53 @@ export const ReceiptsListPage: React.FC = () => {
                     <td className="py-3 px-4 text-right font-extrabold text-slate-900 text-base">
                       {r.total_amount.toFixed(2)} €
                     </td>
+
+                    {/* Status or Assignment Control */}
                     <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>Procesado</span>
-                      </span>
+                      {currentTab === 'pending' ? (
+                        <div className="flex items-center justify-center space-x-2">
+                          <select
+                            value={
+                              rowSelectedHouseholds[r.id] ||
+                              activeHousehold?.id ||
+                              (households[0] ? households[0].id : '')
+                            }
+                            onChange={(e) =>
+                              setRowSelectedHouseholds({
+                                ...rowSelectedHouseholds,
+                                [r.id]: e.target.value,
+                              })
+                            }
+                            className="text-xs font-medium border border-slate-200 bg-white rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          >
+                            {households.map((h) => (
+                              <option key={h.id} value={h.id}>
+                                {h.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleAssignSingle(r.id)}
+                            disabled={assigningId === r.id}
+                            className="inline-flex items-center space-x-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-2.5 py-1 rounded-lg text-xs transition disabled:opacity-50"
+                          >
+                            {assigningId === r.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <ArrowRight className="w-3 h-3" />
+                            )}
+                            <span>Asignar</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Procesado</span>
+                        </span>
+                      )}
                     </td>
+
                     <td className="py-3 px-4 text-center">
                       <button
                         onClick={() => handleViewDetail(r.id)}
@@ -211,11 +470,23 @@ export const ReceiptsListPage: React.FC = () => {
       {!isLoading && filteredReceipts.length === 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center space-y-3">
           <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto">
-            <ReceiptIcon className="w-6 h-6" />
+            {currentTab === 'pending' ? (
+              <Clock className="w-6 h-6 text-amber-500" />
+            ) : (
+              <ReceiptIcon className="w-6 h-6" />
+            )}
           </div>
-          <h3 className="text-base font-semibold text-slate-900">No se encontraron tickets</h3>
+          <h3 className="text-base font-semibold text-slate-900">
+            {currentTab === 'pending'
+              ? 'No tienes tickets pendientes de asignar'
+              : 'No se encontraron tickets'}
+          </h3>
           <p className="text-sm text-slate-500 max-w-sm mx-auto">
-            Sube un archivo PDF o limpia los filtros de búsqueda.
+            {currentTab === 'pending'
+              ? 'Todos tus tickets importados están asignados correctamente a sus hogares.'
+              : searchTerm
+              ? 'Limpia los filtros de búsqueda para ver más tickets.'
+              : `Aún no hay tickets registrados en ${activeHousehold?.name || 'este hogar'}. Sube tu primer ticket en PDF con el botón superior.`}
           </p>
         </div>
       )}

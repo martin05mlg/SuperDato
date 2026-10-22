@@ -35,6 +35,7 @@ async def test_google_authorize_url_and_state(client: AsyncClient):
         "email": "laura@ejemplo.com",
         "password": "PasswordLaura123!",
         "full_name": "Laura Sánchez",
+        "registration_token": "TEST-TOKEN-1234",
     })
     token = user_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -71,6 +72,7 @@ async def test_trigger_sync_and_import_jobs(client: AsyncClient):
         "email": "pablo@ejemplo.com",
         "password": "PasswordPablo123!",
         "full_name": "Pablo Ruiz",
+        "registration_token": "TEST-TOKEN-1234",
     })
     token = user_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

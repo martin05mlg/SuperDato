@@ -9,6 +9,7 @@ import type {
   CategoryDistributionItem,
   SpendingEvolutionPoint,
   TopProductItem,
+  HouseholdHabits,
 } from '../types';
 
 export interface AnalyticsFilterParams {
@@ -38,9 +39,12 @@ export const receiptsApi = {
     return res.data;
   },
 
-  uploadPdf: async (file: File): Promise<Receipt> => {
+  uploadPdf: async (file: File, householdId?: string): Promise<Receipt> => {
     const formData = new FormData();
     formData.append('file', file);
+    if (householdId) {
+      formData.append('household_id', householdId);
+    }
     const res = await apiClient.post<Receipt>('/receipts/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -64,8 +68,40 @@ export const receiptsApi = {
     return res.data;
   },
 
-  getTopProducts: async (params?: AnalyticsFilterParams & { limit?: number }): Promise<TopProductItem[]> => {
+  getTopProducts: async (
+    params?: AnalyticsFilterParams & { limit?: number; sort_by?: 'spend' | 'purchases' | 'quantity' }
+  ): Promise<TopProductItem[]> => {
     const res = await apiClient.get<TopProductItem[]>('/analytics/top-products', { params });
+    return res.data;
+  },
+
+  getHabits: async (params?: AnalyticsFilterParams): Promise<HouseholdHabits> => {
+    const res = await apiClient.get<HouseholdHabits>('/analytics/habits', { params });
+    return res.data;
+  },
+
+  getPending: async (): Promise<ReceiptResponse[]> => {
+    const res = await apiClient.get<ReceiptResponse[]>('/receipts/pending');
+    return res.data;
+  },
+
+  getPendingCount: async (): Promise<{ count: number }> => {
+    const res = await apiClient.get<{ count: number }>('/receipts/pending-count');
+    return res.data;
+  },
+
+  assignHousehold: async (receiptId: string, householdId: string): Promise<Receipt> => {
+    const res = await apiClient.post<Receipt>(`/receipts/${receiptId}/assign`, {
+      household_id: householdId,
+    });
+    return res.data;
+  },
+
+  bulkAssign: async (receiptIds: string[], householdId: string): Promise<{ assigned_count: number }> => {
+    const res = await apiClient.post<{ assigned_count: number }>('/receipts/bulk-assign', {
+      receipt_ids: receiptIds,
+      household_id: householdId,
+    });
     return res.data;
   },
 };

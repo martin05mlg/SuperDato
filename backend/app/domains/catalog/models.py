@@ -200,10 +200,10 @@ class PriceObservation(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-    household_id: Mapped[uuid.UUID] = mapped_column(
+    household_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid,
         ForeignKey("households.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     product_id: Mapped[uuid.UUID] = mapped_column(

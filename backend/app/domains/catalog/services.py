@@ -164,7 +164,7 @@ class CatalogService:
     @staticmethod
     async def record_price_observation(
         db: AsyncSession,
-        household_id: uuid.UUID,
+        household_id: Optional[uuid.UUID],
         product_id: uuid.UUID,
         receipt_line_id: uuid.UUID,
         observed_at: datetime,
@@ -209,21 +209,25 @@ class CatalogService:
         return obs
 
     @staticmethod
-    async def list_categories(db: AsyncSession) -> List[Dict[str, Any]]:
-        """Lists all categories with active product counts."""
+    async def list_categories(
+        db: AsyncSession,
+        household_id: Optional[uuid.UUID] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lists all categories with active product counts for the given household."""
+        from app.domains.catalog.models import PriceObservation
         await CatalogService.ensure_system_categories(db)
-        stmt = (
-            select(
-                Category,
-                func.count(Product.id).label("product_count"),
-            )
-            .outerjoin(Product, Product.category_id == Category.id)
-            .group_by(Category.id)
-            .order_by(Category.name)
-        )
-        result = await db.execute(stmt)
+        
+        cat_stmt = select(Category).order_by(Category.name)
+        res = await db.execute(cat_stmt)
+        all_cats = res.scalars().all()
+
         categories = []
-        for cat, count in result.all():
+        for cat in all_cats:
+            count_stmt = select(func.count(func.distinct(Product.id))).where(Product.category_id == cat.id)
+            if household_id:
+                count_stmt = count_stmt.where(Product.price_observations.any(PriceObservation.household_id == household_id))
+            count = (await db.execute(count_stmt)).scalar_one()
+
             categories.append({
                 "id": str(cat.id),
                 "parent_id": str(cat.parent_id) if cat.parent_id else None,
@@ -239,12 +243,14 @@ class CatalogService:
     @staticmethod
     async def list_products(
         db: AsyncSession,
+        household_id: Optional[uuid.UUID] = None,
         category_id: Optional[str] = None,
         search: Optional[str] = None,
         skip: int = 0,
-        limit: int = 50,
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        """Lists canonical products with latest observed prices and summary stats."""
+        """Lists canonical products with latest observed prices scoped to the given household."""
+        from app.domains.catalog.models import PriceObservation
         stmt = (
             select(Product)
             .options(
@@ -254,6 +260,9 @@ class CatalogService:
             )
             .order_by(Product.canonical_name)
         )
+
+        if household_id:
+            stmt = stmt.where(Product.price_observations.any(PriceObservation.household_id == household_id))
 
         if category_id:
             try:
@@ -277,7 +286,11 @@ class CatalogService:
 
         items = []
         for p in products:
-            obs_list = sorted(p.price_observations, key=lambda o: o.observed_at)
+            if household_id:
+                obs_list = [o for o in p.price_observations if o.household_id == household_id]
+            else:
+                obs_list = list(p.price_observations)
+            obs_list = sorted(obs_list, key=lambda o: o.observed_at)
             latest_obs = obs_list[-1] if obs_list else None
             prices = [float(o.unit_price) for o in obs_list]
 

@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.domains.analytics.schemas import (
     AnalyticsSummaryResponse,
     CategoryDistributionResponse,
+    HouseholdHabitsResponse,
     SpendingPointResponse,
     TopProductResponse,
 )
@@ -70,6 +71,7 @@ async def get_top_products(
     start_date: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
     limit: int = Query(10, ge=1, le=50, description="Número de productos a devolver"),
+    sort_by: str = Query("spend", description="Criterio de ordenación: 'spend' (gasto total) o 'purchases' (nº de compras) o 'quantity'"),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns top ranked products by accumulated spend, units and purchase count."""
@@ -79,4 +81,21 @@ async def get_top_products(
         start_date=start_date,
         end_date=end_date,
         limit=limit,
+        sort_by=sort_by,
+    )
+
+
+@router.get("/habits", response_model=HouseholdHabitsResponse)
+async def get_shopping_habits(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por ID de hogar"),
+    start_date: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns shopping habits: weekday distribution, top stores visited, and tax breakdown."""
+    return await AnalyticsService.get_habits(
+        db=db,
+        household_id=household_id,
+        start_date=start_date,
+        end_date=end_date,
     )

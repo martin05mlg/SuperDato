@@ -49,7 +49,7 @@ class AnalyticsService:
         await AnalyticsService._ensure_data(db)
 
         # 1. Base query for current period
-        query = select(Receipt)
+        query = select(Receipt).where(Receipt.assignment_status == "ASSIGNED")
         if household_id:
             query = query.where(Receipt.household_id == household_id)
         if start_date:
@@ -107,9 +107,26 @@ class AnalyticsService:
         )
         total_items = (await db.execute(items_stmt)).scalar_one() or 0
 
-        # 3. Calculate Previous Period spend for MoM comparison
+        # Calculate min and max ticket
+        amounts = [float(r.total_amount) for r in receipts]
+        max_ticket = round(max(amounts), 2) if amounts else 0.0
+        min_ticket = round(min(amounts), 2) if amounts else 0.0
+
+        # Calculate average shopping frequency in days
+        shopping_frequency_days = None
+        if len(receipts) >= 2:
+            dates = sorted([r.purchase_date for r in receipts if r.purchase_date])
+            if len(dates) >= 2:
+                total_days = (dates[-1] - dates[0]).days
+                if total_days > 0:
+                    shopping_frequency_days = round(total_days / (len(dates) - 1), 1)
+
+        # 3. Calculate Previous Period comparison
         prev_spend = 0.0
         period_label = "Histórico completo"
+        comparison_label = None
+        monthly_average_spend = None
+        spend_variation = 0.0
 
         if start_date and end_date:
             duration_days = (end_date - start_date).days + 1
@@ -124,50 +141,27 @@ class AnalyticsService:
             if household_id:
                 prev_stmt = prev_stmt.where(Receipt.household_id == household_id)
             prev_spend = float((await db.execute(prev_stmt)).scalar_one() or 0.0)
-        else:
-            # When looking at all-time, compare the current calendar month with the previous month
-            today = date.today()
-            curr_month_start = today.replace(day=1)
-            prev_month_end = curr_month_start - timedelta(days=1)
-            prev_month_start = prev_month_end.replace(day=1)
 
-            curr_month_stmt = select(func.coalesce(func.sum(Receipt.total_amount), 0.0)).where(
-                Receipt.purchase_date >= curr_month_start,
-                Receipt.purchase_date <= today,
-            )
-            prev_month_stmt = select(func.coalesce(func.sum(Receipt.total_amount), 0.0)).where(
-                Receipt.purchase_date >= prev_month_start,
-                Receipt.purchase_date <= prev_month_end,
-            )
-            if household_id:
-                curr_month_stmt = curr_month_stmt.where(Receipt.household_id == household_id)
-                prev_month_stmt = prev_month_stmt.where(Receipt.household_id == household_id)
-
-            curr_m_spend = float((await db.execute(curr_month_stmt)).scalar_one() or 0.0)
-            prev_m_spend = float((await db.execute(prev_month_stmt)).scalar_one() or 0.0)
-
-            prev_spend = prev_m_spend
             if prev_spend > 0:
-                spend_variation = round(((curr_m_spend - prev_spend) / prev_spend) * 100, 1)
+                spend_variation = round(((total_spend - prev_spend) / prev_spend) * 100, 1)
+                comparison_label = f"vs. periodo anterior ({prev_start.strftime('%d/%m')} - {prev_end.strftime('%d/%m')}: {prev_spend:.2f} €)"
             else:
                 spend_variation = 0.0
-
-            return {
-                "total_spend": round(total_spend, 2),
-                "previous_spend": round(prev_spend, 2),
-                "spend_variation_pct": spend_variation,
-                "receipt_count": count,
-                "average_ticket": avg_ticket,
-                "median_ticket": median_ticket,
-                "total_items_count": int(total_items),
-                "last_purchase_date": last_purchase_date,
-                "last_sync_at": "Sincronizado vía Gmail / PDF",
-                "period_label": period_label,
-            }
-
-        spend_variation = 0.0
-        if prev_spend > 0:
-            spend_variation = round(((total_spend - prev_spend) / prev_spend) * 100, 1)
+                comparison_label = f"Sin compras en el periodo anterior ({prev_start.strftime('%d/%m')} - {prev_end.strftime('%d/%m')})"
+        else:
+            # When looking at all-time, estimate the monthly average across active months
+            dates = sorted([r.purchase_date for r in receipts if r.purchase_date])
+            if dates:
+                min_d = dates[0]
+                max_d = dates[-1]
+                months_count = max(1, (max_d.year - min_d.year) * 12 + max_d.month - min_d.month + 1)
+            else:
+                months_count = 1
+            monthly_avg = round(total_spend / months_count, 2)
+            monthly_average_spend = monthly_avg
+            prev_spend = 0.0
+            spend_variation = 0.0
+            comparison_label = None
 
         return {
             "total_spend": round(total_spend, 2),
@@ -180,6 +174,11 @@ class AnalyticsService:
             "last_purchase_date": last_purchase_date,
             "last_sync_at": "Sincronizado vía Gmail / PDF",
             "period_label": period_label,
+            "comparison_label": comparison_label,
+            "max_ticket_amount": max_ticket,
+            "min_ticket_amount": min_ticket,
+            "shopping_frequency_days": shopping_frequency_days,
+            "monthly_average_spend": monthly_average_spend,
         }
 
     @staticmethod
@@ -201,6 +200,7 @@ class AnalyticsService:
             .join(Receipt, ReceiptLine.receipt_id == Receipt.id)
             .join(Product, ReceiptLine.product_id == Product.id, isouter=True)
             .join(Category, Product.category_id == Category.id, isouter=True)
+            .where(Receipt.assignment_status == "ASSIGNED")
         )
 
         if household_id:
@@ -249,6 +249,7 @@ class AnalyticsService:
                 func.sum(Receipt.total_amount).label("total_amount"),
                 func.count(Receipt.id).label("receipt_count"),
             )
+            .where(Receipt.assignment_status == "ASSIGNED")
         )
 
         if household_id:
@@ -281,8 +282,9 @@ class AnalyticsService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         limit: int = 10,
+        sort_by: str = "spend",
     ) -> List[Dict]:
-        """Returns the top products ranked by total spend within the selected time window."""
+        """Returns top products ranked by total spend or purchase frequency within the selected time window."""
         await AnalyticsService._ensure_data(db)
         stmt = (
             select(
@@ -299,6 +301,7 @@ class AnalyticsService:
             .join(Receipt, ReceiptLine.receipt_id == Receipt.id)
             .join(Product, ReceiptLine.product_id == Product.id, isouter=True)
             .join(Category, Product.category_id == Category.id, isouter=True)
+            .where(Receipt.assignment_status == "ASSIGNED")
         )
 
         if household_id:
@@ -308,13 +311,16 @@ class AnalyticsService:
         if end_date:
             stmt = stmt.where(Receipt.purchase_date <= end_date)
 
-        stmt = (
-            stmt.group_by("prod_id", "product_name", "category_name", Product.image_url, Product.enriched_name, Product.brand)
-            .order_by(desc("total_spend"))
-            .limit(limit)
-        )
+        group_stmt = stmt.group_by("prod_id", "product_name", "category_name", Product.image_url, Product.enriched_name, Product.brand)
 
-        res = await db.execute(stmt)
+        if sort_by == "purchases":
+            ordered_stmt = group_stmt.order_by(desc("purchases_count"), desc("total_quantity"), desc("total_spend")).limit(limit)
+        elif sort_by == "quantity":
+            ordered_stmt = group_stmt.order_by(desc("total_quantity"), desc("total_spend")).limit(limit)
+        else:
+            ordered_stmt = group_stmt.order_by(desc("total_spend"), desc("purchases_count")).limit(limit)
+
+        res = await db.execute(ordered_stmt)
         rows = res.all()
 
         result = []
@@ -341,3 +347,193 @@ class AnalyticsService:
             })
 
         return result
+
+    @staticmethod
+    async def get_habits(
+        db: AsyncSession,
+        household_id: Optional[uuid.UUID] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> Dict:
+        """
+        Calculates household shopping habits and telemetry:
+        1. Weekday distribution (e.g. favorite day to shop).
+        2. Top stores visited with visit counts and spend.
+        3. Detailed tax breakdown (IVA 4%, 10%, 21%).
+        """
+        from collections import defaultdict
+        from app.domains.receipts.models import ReceiptTaxLine
+
+        await AnalyticsService._ensure_data(db)
+
+        # 1. Fetch matching receipts
+        query = select(Receipt).where(Receipt.assignment_status == "ASSIGNED")
+        if household_id:
+            query = query.where(Receipt.household_id == household_id)
+        if start_date:
+            query = query.where(Receipt.purchase_date >= start_date)
+        if end_date:
+            query = query.where(Receipt.purchase_date <= end_date)
+
+        res = await db.execute(query)
+        receipts = res.scalars().all()
+
+        if not receipts:
+            return {
+                "weekday_distribution": [],
+                "top_stores": [],
+                "basket_composition": [],
+                "tax_breakdown": [],
+                "total_tax_paid": 0.0,
+                "favorite_day": None,
+                "top_store_name": None,
+            }
+
+        total_spend = sum(float(r.total_amount) for r in receipts) or 1.0
+
+        # Weekdays
+        day_names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        by_day = defaultdict(lambda: {"count": 0, "spend": 0.0})
+        for r in receipts:
+            if r.purchase_date:
+                wd = r.purchase_date.weekday()
+                by_day[wd]["count"] += 1
+                by_day[wd]["spend"] += float(r.total_amount)
+
+        weekday_dist = []
+        for wd in range(7):
+            d = by_day[wd]
+            weekday_dist.append({
+                "day_name": day_names[wd],
+                "day_number": wd,
+                "receipt_count": d["count"],
+                "total_spend": round(d["spend"], 2),
+                "percentage": round((d["spend"] / total_spend) * 100, 1) if total_spend > 0 else 0.0,
+            })
+
+        active_days = [w for w in weekday_dist if w["receipt_count"] > 0]
+        favorite_day = max(active_days, key=lambda x: x["total_spend"])["day_name"] if active_days else None
+
+        # Top Stores
+        by_store = defaultdict(lambda: {"city": "", "count": 0, "spend": 0.0})
+        for r in receipts:
+            raw_addr = (r.store_address or "Mercadona").strip()
+            city = (r.store_city or "").strip()
+            cleaned_addr = raw_addr
+            if "VENANCIO HUARTE" in raw_addr.upper():
+                cleaned_addr = "C/ Padre Venancio Huarte"
+                city = "Zaragoza"
+            by_store[(cleaned_addr, city)]["count"] += 1
+            by_store[(cleaned_addr, city)]["spend"] += float(r.total_amount)
+
+        top_stores = []
+        sorted_stores = sorted(by_store.items(), key=lambda item: item[1]["count"], reverse=True)
+        for (addr, city), data in sorted_stores[:5]:
+            top_stores.append({
+                "store_name": addr,
+                "city": city or None,
+                "receipt_count": data["count"],
+                "total_spend": round(data["spend"], 2),
+                "percentage": round((data["spend"] / total_spend) * 100, 1),
+            })
+        top_store_name = top_stores[0]["store_name"] if top_stores else None
+
+        receipt_ids = [r.id for r in receipts]
+
+        # Basket Macro Composition for Household
+        lines_stmt = (
+            select(
+                func.coalesce(Category.slug, "otros").label("slug"),
+                func.sum(ReceiptLine.line_total).label("total_spend"),
+                func.count(ReceiptLine.id).label("items_count"),
+            )
+            .join(Receipt, ReceiptLine.receipt_id == Receipt.id)
+            .outerjoin(Product, ReceiptLine.product_id == Product.id)
+            .outerjoin(Category, Product.category_id == Category.id)
+            .where(Receipt.id.in_(receipt_ids))
+            .group_by(Category.slug)
+        )
+        l_res = await db.execute(lines_stmt)
+        cat_data = {row.slug: {"spend": float(row.total_spend or 0.0), "count": int(row.items_count or 0)} for row in l_res}
+
+        macro_groups_def = [
+            {
+                "group_name": "Productos Frescos",
+                "description": "Frutas, verduras, carne y pescado fresco",
+                "icon": "Apple",
+                "color_hex": "#10B981",
+                "slugs": ["frutas-y-verduras", "carniceria-y-charcuteria", "pescaderia"],
+            },
+            {
+                "group_name": "Despensa y Básicos",
+                "description": "Lácteos, panadería, conservas, bebidas y legumbres",
+                "icon": "Package",
+                "color_hex": "#3B82F6",
+                "slugs": ["lacteos-y-huevos", "panaderia-y-pasteleria", "despensa-y-conservas", "bebidas-y-refrescos", "congelados"],
+            },
+            {
+                "group_name": "Hogar y Cuidado Personal",
+                "description": "Droguería, limpieza, higiene y mascotas",
+                "icon": "Sparkles",
+                "color_hex": "#14B8A6",
+                "slugs": ["limpieza-y-hogar", "cuidado-personal-y-perfumeria", "mascotas"],
+            },
+            {
+                "group_name": "Platos Preparados y Varios",
+                "description": "Listos para comer y miscelánea",
+                "icon": "UtensilsCrossed",
+                "color_hex": "#F97316",
+                "slugs": ["platos-preparados", "otros"],
+            },
+        ]
+
+        total_lines_spend = sum(d["spend"] for d in cat_data.values()) or total_spend
+        basket_composition = []
+        for g in macro_groups_def:
+            g_spend = sum(cat_data.get(s, {}).get("spend", 0.0) for s in g["slugs"])
+            g_count = sum(cat_data.get(s, {}).get("count", 0) for s in g["slugs"])
+            pct = round((g_spend / total_lines_spend) * 100, 1) if total_lines_spend > 0 else 0.0
+            basket_composition.append({
+                "group_name": g["group_name"],
+                "description": g["description"],
+                "icon": g["icon"],
+                "color_hex": g["color_hex"],
+                "total_spend": round(g_spend, 2),
+                "percentage": pct,
+                "items_count": g_count,
+            })
+
+        # Tax Breakdown
+        tax_stmt = select(ReceiptTaxLine).where(ReceiptTaxLine.receipt_id.in_(receipt_ids))
+        t_res = await db.execute(tax_stmt)
+        tax_lines = t_res.scalars().all()
+
+        by_rate = defaultdict(lambda: {"base": 0.0, "tax": 0.0, "total": 0.0})
+        for t in tax_lines:
+            rate = float(t.tax_rate_percent)
+            if rate in [4.0, 10.0, 21.0, 0.0, 2.0, 5.0]:
+                by_rate[rate]["base"] += float(t.taxable_base)
+                by_rate[rate]["tax"] += float(t.tax_amount)
+                by_rate[rate]["total"] += float(t.total_with_tax)
+
+        total_tax_paid = sum(v["tax"] for v in by_rate.values())
+        tax_breakdown = []
+        for rate, vals in sorted(by_rate.items(), key=lambda x: x[0]):
+            pct_of_tax = round((vals["tax"] / total_tax_paid) * 100, 1) if total_tax_paid > 0 else 0.0
+            tax_breakdown.append({
+                "tax_rate_percent": rate,
+                "taxable_base": round(vals["base"], 2),
+                "tax_amount": round(vals["tax"], 2),
+                "total_with_tax": round(vals["total"], 2),
+                "percentage_of_tax": pct_of_tax,
+            })
+
+        return {
+            "weekday_distribution": weekday_dist,
+            "top_stores": top_stores,
+            "basket_composition": basket_composition,
+            "tax_breakdown": tax_breakdown,
+            "total_tax_paid": round(total_tax_paid, 2),
+            "favorite_day": favorite_day,
+            "top_store_name": top_store_name,
+        }

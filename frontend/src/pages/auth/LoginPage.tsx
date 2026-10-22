@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
-import { ShoppingBag, Lock, Mail, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Lock, Mail, AlertCircle, Sparkles } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -28,6 +28,26 @@ export const LoginPage: React.FC = () => {
       navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al iniciar sesión. Revisa tus credenciales.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickDemoLogin = async () => {
+    setError(null);
+    setLoading(true);
+
+    try {
+      const response = await apiClient.post('/auth/login', {
+        email: 'dev@superdato.es',
+        password: 'superdato123',
+      });
+
+      const { access_token, refresh_token, user } = response.data;
+      login(access_token, refresh_token, user);
+      navigate('/');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al iniciar sesión con cuenta demo.');
     } finally {
       setLoading(false);
     }
@@ -99,6 +119,25 @@ export const LoginPage: React.FC = () => {
               {loading ? 'Iniciando sesión...' : 'Entrar'}
             </button>
           </form>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-slate-400 font-semibold tracking-wider">o pruébalo al instante</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleQuickDemoLogin}
+            disabled={loading}
+            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 transition disabled:opacity-50 shadow-2xs"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Acceso Demo (19 tickets precargados)</span>
+          </button>
 
           <div className="mt-6 text-center text-xs text-slate-500">
             ¿No tienes cuenta?{' '}

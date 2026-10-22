@@ -1,12 +1,14 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
   Receipt,
   Package,
   ArrowDownToLine,
   Settings,
-  Sparkles
+  Sparkles,
+  ShieldAlert,
 } from 'lucide-react';
 
 const navItems = [
@@ -18,6 +20,8 @@ const navItems = [
 ];
 
 export const Sidebar: React.FC = () => {
+  const { user } = useAuth();
+
   return (
     <aside className="w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-4rem)] p-4 hidden md:flex flex-col justify-between">
       <nav className="space-y-1">
@@ -40,6 +44,27 @@ export const Sidebar: React.FC = () => {
             </NavLink>
           );
         })}
+
+        {user?.is_superuser && (
+          <div className="pt-3 mt-3 border-t border-slate-100">
+            <div className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Administración
+            </div>
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center space-x-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+                  isActive
+                    ? 'bg-purple-50 text-purple-700 font-bold'
+                    : 'text-slate-600 hover:bg-purple-50/50 hover:text-purple-900'
+                }`
+              }
+            >
+              <ShieldAlert className="w-5 h-5 text-purple-600 flex-shrink-0" />
+              <span>Panel Superadmin</span>
+            </NavLink>
+          </div>
+        )}
       </nav>
 
       {/* Footer Info Box */}

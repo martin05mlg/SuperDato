@@ -43,5 +43,10 @@ export const householdsApi = {
   removeMember: async (householdId: string, userId: string) => {
     await apiClient.delete(`/households/${householdId}/members/${userId}`);
   },
+
+  acceptInvitation: async (token: string): Promise<Household> => {
+    const res = await apiClient.post<Household>(`/households/invitations/${token}/accept`);
+    return res.data;
+  },
 };
 

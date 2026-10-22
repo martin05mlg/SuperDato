@@ -11,6 +11,7 @@ import { ProductsPage } from './pages/products/ProductsPage';
 import { ImportsPage } from './pages/imports/ImportsPage';
 import { GoogleCallbackPage } from './pages/imports/GoogleCallbackPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 
@@ -35,9 +36,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
-  // In initial dev / testing, if not logged in, we allow browsing or redirect
-  if (!isAuthenticated && localStorage.getItem('access_token')) {
-    return <>{children}</>;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
@@ -69,6 +69,7 @@ export const App: React.FC = () => {
                 <Route path="products" element={<ProductsPage />} />
                 <Route path="imports" element={<ImportsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="admin" element={<AdminDashboardPage />} />
               </Route>
 
               {/* Catch-all redirect */}

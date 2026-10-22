@@ -32,10 +32,12 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { catalogApi } from '../../api/catalog.api';
+import { useHousehold } from '../../context/HouseholdContext';
 import type { Product } from '../../types';
 
 export const ProductsPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { activeHousehold } = useHousehold();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<Product | null>(null);
@@ -66,31 +68,32 @@ export const ProductsPage: React.FC = () => {
 
   // Queries
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
-    queryFn: catalogApi.getCategories,
+    queryKey: ['categories', activeHousehold?.id],
+    queryFn: () => catalogApi.getCategories(activeHousehold?.id),
   });
 
   const { data: products = [], isLoading: isLoadingProducts } = useQuery({
-    queryKey: ['products', selectedCategory, searchTerm],
+    queryKey: ['products', activeHousehold?.id, selectedCategory, searchTerm],
     queryFn: () =>
       catalogApi.getProducts({
+        household_id: activeHousehold?.id,
         category_id: selectedCategory || undefined,
         search: searchTerm || undefined,
       }),
   });
 
   const { data: priceHistory, isLoading: isLoadingHistory } = useQuery({
-    queryKey: ['priceHistory', selectedProductForHistory?.id],
+    queryKey: ['priceHistory', selectedProductForHistory?.id, activeHousehold?.id],
     queryFn: () =>
       selectedProductForHistory
-        ? catalogApi.getPriceHistory(selectedProductForHistory.id)
+        ? catalogApi.getPriceHistory(selectedProductForHistory.id, activeHousehold?.id)
         : null,
     enabled: !!selectedProductForHistory,
   });
 
   const { data: suggestions = [], isLoading: isLoadingSuggestions } = useQuery({
-    queryKey: ['mercadonaSuggestions'],
-    queryFn: () => catalogApi.getMercadonaSuggestions(30),
+    queryKey: ['mercadonaSuggestions', activeHousehold?.id],
+    queryFn: () => catalogApi.getMercadonaSuggestions(30, activeHousehold?.id),
     enabled: isSuggestionsModalOpen,
   });
 
@@ -477,7 +480,9 @@ export const ProductsPage: React.FC = () => {
             <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-base font-semibold text-slate-800">No se encontraron productos</h3>
             <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-              Prueba con otro término de búsqueda o cambia los filtros seleccionados.
+              {searchTerm || selectedCategory
+                ? 'Prueba con otro término de búsqueda o cambia los filtros seleccionados.'
+                : `Aún no hay productos registrados en ${activeHousehold?.name || 'este hogar'}. Sube tu primer ticket en PDF para registrar compras y comparar precios.`}
             </p>
           </div>
         ) : (

@@ -38,6 +38,22 @@ def event_loop():
 async def init_test_db():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    # Auto-seed test registration token
+    import uuid
+    from app.domains.auth.models import RegistrationToken
+    async with test_async_session() as session:
+        token = RegistrationToken(
+            id=uuid.uuid4(),
+            token="TEST-TOKEN-1234",
+            note="Test registration token",
+            max_uses=1000,
+            times_used=0,
+            is_active=True,
+        )
+        session.add(token)
+        await session.commit()
+
     yield
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

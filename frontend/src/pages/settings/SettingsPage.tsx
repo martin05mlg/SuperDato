@@ -17,15 +17,28 @@ import {
   ShoppingCart,
   Check,
   Save,
+  Pencil,
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const { activeHousehold, refreshHouseholds } = useHousehold();
+  const { activeHousehold, refreshHouseholds, setActiveHousehold } = useHousehold();
 
   // State for creating new household
   const [showNewModal, setShowNewModal] = useState(false);
   const [newHouseholdName, setNewHouseholdName] = useState('');
+
+  // State for renaming active household (Owner / Admin)
+  const [editingHouseholdName, setEditingHouseholdName] = useState(false);
+  const [householdNameInput, setHouseholdNameInput] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [nameSavedSuccess, setNameSavedSuccess] = useState(false);
+
+  // State for joining household via token
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinToken, setJoinToken] = useState('');
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
 
   // State for inviting members
   const [inviteEmail, setInviteEmail] = useState('');
@@ -44,11 +57,36 @@ export const SettingsPage: React.FC = () => {
   const [enrichResult, setEnrichResult] = useState<string | null>(null);
 
   useEffect(() => {
-    if (activeHousehold?.settings) {
-      setMercadonaEnabled(!!activeHousehold.settings.mercadona_online_enabled);
-      setMercadonaPostalCode(activeHousehold.settings.mercadona_postal_code || '50007');
+    if (activeHousehold) {
+      setHouseholdNameInput(activeHousehold.name);
+      if (activeHousehold.settings) {
+        setMercadonaEnabled(!!activeHousehold.settings.mercadona_online_enabled);
+        setMercadonaPostalCode(activeHousehold.settings.mercadona_postal_code || '50007');
+      }
     }
   }, [activeHousehold]);
+
+  const canManageHousehold = activeHousehold?.role === 'OWNER' || activeHousehold?.role === 'ADMIN';
+
+  const handleSaveHouseholdName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeHousehold || !householdNameInput.trim()) return;
+    try {
+      setIsSavingName(true);
+      const updated = await householdsApi.update(activeHousehold.id, {
+        name: householdNameInput.trim(),
+      });
+      await refreshHouseholds();
+      setActiveHousehold(updated);
+      setEditingHouseholdName(false);
+      setNameSavedSuccess(true);
+      setTimeout(() => setNameSavedSuccess(false), 3000);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al actualizar el nombre del hogar.');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
 
   // Warehouse resolution helper
   const getWarehouseName = (cp: string) => {
@@ -132,12 +170,33 @@ export const SettingsPage: React.FC = () => {
     if (!newHouseholdName.trim()) return;
 
     try {
-      await householdsApi.create({ name: newHouseholdName.trim() });
+      const created = await householdsApi.create({ name: newHouseholdName.trim() });
       await refreshHouseholds();
+      setActiveHousehold(created);
       setNewHouseholdName('');
       setShowNewModal(false);
     } catch {
       alert('Error al crear el nuevo hogar.');
+    }
+  };
+
+  const handleJoinHousehold = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinToken.trim()) return;
+
+    try {
+      setIsJoining(true);
+      setJoinError(null);
+      const joined = await householdsApi.acceptInvitation(joinToken.trim());
+      await refreshHouseholds();
+      setActiveHousehold(joined);
+      setJoinToken('');
+      setShowJoinModal(false);
+      alert(`¡Te has unido exitosamente al hogar "${joined.name}"!`);
+    } catch (err: any) {
+      setJoinError(err.response?.data?.detail || 'Error al aceptar la invitación.');
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -182,14 +241,59 @@ export const SettingsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowNewModal(true)}
-          className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-xl text-sm shadow-sm transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Crear Nuevo Hogar</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => {
+              setJoinError(null);
+              setShowJoinModal(true);
+            }}
+            className="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-xl text-sm transition"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Unirse con Invitación</span>
+          </button>
+
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-xl text-sm shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Crear Nuevo Hogar</span>
+          </button>
+        </div>
       </div>
+
+      {!activeHousehold ? (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+            <Users className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">Aún no tienes ningún hogar activo</h2>
+          <p className="text-sm text-slate-500 max-w-md mx-auto">
+            Crea tu primer hogar para empezar a registrar tickets y analizar tus compras, o únete a un hogar existente mediante un código de invitación.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => setShowNewModal(true)}
+              className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm shadow-sm transition"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Crear Mi Primer Hogar</span>
+            </button>
+            <button
+              onClick={() => {
+                setJoinError(null);
+                setShowJoinModal(true);
+              }}
+              className="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-5 py-2.5 rounded-xl text-sm transition"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Unirse con Invitación</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
 
       {/* Household Info Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
@@ -199,9 +303,65 @@ export const SettingsPage: React.FC = () => {
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm pt-2">
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-            <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Nombre</span>
-            <div className="font-semibold text-slate-800 mt-1">{activeHousehold?.name || 'Hogar'}</div>
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Nombre del Hogar</span>
+              {canManageHousehold && !editingHouseholdName && (
+                <button
+                  type="button"
+                  onClick={() => setEditingHouseholdName(true)}
+                  className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center space-x-1 transition"
+                  title="Cambiar nombre del hogar"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Editar</span>
+                </button>
+              )}
+            </div>
+
+            {editingHouseholdName ? (
+              <form onSubmit={handleSaveHouseholdName} className="mt-1 space-y-2">
+                <input
+                  type="text"
+                  required
+                  value={householdNameInput}
+                  onChange={(e) => setHouseholdNameInput(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                  placeholder="Nombre del hogar"
+                  autoFocus
+                />
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="submit"
+                    disabled={isSavingName || !householdNameInput.trim()}
+                    className="inline-flex items-center space-x-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50 transition"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isSavingName ? 'Guardando...' : 'Guardar'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHouseholdNameInput(activeHousehold?.name || '');
+                      setEditingHouseholdName(false);
+                    }}
+                    className="px-2.5 py-1 text-slate-600 hover:text-slate-800 text-xs font-medium rounded-lg hover:bg-slate-200 transition"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="flex items-center justify-between mt-1">
+                <div className="font-semibold text-slate-800 text-base">{activeHousehold?.name || 'Hogar'}</div>
+                {nameSavedSuccess && (
+                  <span className="inline-flex items-center space-x-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full animate-in fade-in">
+                    <Check className="w-3 h-3" />
+                    <span>Guardado</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
             <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Moneda</span>
@@ -454,6 +614,8 @@ export const SettingsPage: React.FC = () => {
           </form>
         </div>
       </div>
+      </>
+      )}
 
       {/* Modal to Create New Household */}
       {showNewModal && (
@@ -492,6 +654,61 @@ export const SettingsPage: React.FC = () => {
                   className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition"
                 >
                   Crear Hogar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal to Join Household via Invitation Token */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Users className="w-5 h-5 text-emerald-600" />
+              <span>Unirse a un Hogar</span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              Introduce el token o código de invitación generado por el administrador del hogar al que deseas unirte.
+            </p>
+
+            {joinError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start space-x-2 text-red-700 text-xs">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{joinError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleJoinHousehold} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Código de Invitación
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={joinToken}
+                  onChange={(e) => setJoinToken(e.target.value)}
+                  placeholder="Pega aquí el token de invitación..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowJoinModal(false)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isJoining}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition disabled:opacity-50"
+                >
+                  {isJoining ? 'Uniéndote...' : 'Aceptar y Unirse'}
                 </button>
               </div>
             </form>

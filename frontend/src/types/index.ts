@@ -10,6 +10,7 @@ export interface User {
   full_name: string;
   is_active: boolean;
   is_verified: boolean;
+  is_superuser?: boolean;
   created_at: string;
 }
 
@@ -82,7 +83,7 @@ export interface ReceiptLineUpdate {
 
 export interface Receipt {
   id: string;
-  household_id: string;
+  household_id?: string | null;
   company_name: string;
   company_cif: string;
   store_address?: string | null;
@@ -95,6 +96,7 @@ export interface Receipt {
   payment_method?: string | null;
   card_last_four?: string | null;
   status: ReceiptStatus;
+  assignment_status?: string;
   extraction_warnings: string[];
   is_manual_override: boolean;
   created_at: string;
@@ -227,6 +229,11 @@ export interface AnalyticsSummary {
   last_purchase_date?: string | null;
   last_sync_at?: string | null;
   period_label?: string | null;
+  comparison_label?: string | null;
+  max_ticket_amount?: number | null;
+  min_ticket_amount?: number | null;
+  shopping_frequency_days?: number | null;
+  monthly_average_spend?: number | null;
 }
 
 export interface SpendingEvolutionPoint {
@@ -255,3 +262,100 @@ export interface TopProductItem {
   enriched_name?: string | null;
   brand?: string | null;
 }
+
+export interface WeekdayDistributionItem {
+  day_name: string;
+  day_number: number;
+  receipt_count: number;
+  total_spend: number;
+  percentage: number;
+}
+
+export interface StoreDistributionItem {
+  store_name: string;
+  city?: string | null;
+  receipt_count: number;
+  total_spend: number;
+  percentage: number;
+}
+
+export interface TaxBreakdownItem {
+  tax_rate_percent: number;
+  taxable_base: number;
+  tax_amount: number;
+  total_with_tax: number;
+  percentage_of_tax: number;
+}
+
+export interface BasketCompositionItem {
+  group_name: string;
+  description: string;
+  icon: string;
+  color_hex: string;
+  total_spend: number;
+  percentage: number;
+  items_count: number;
+}
+
+export interface HouseholdHabits {
+  weekday_distribution: WeekdayDistributionItem[];
+  top_stores: StoreDistributionItem[];
+  basket_composition: BasketCompositionItem[];
+  tax_breakdown?: TaxBreakdownItem[];
+  total_tax_paid?: number;
+  favorite_day?: string | null;
+  top_store_name?: string | null;
+}
+
+export interface RegistrationToken {
+  id: string;
+  token: string;
+  note?: string | null;
+  max_uses: number;
+  times_used: number;
+  is_active: boolean;
+  expires_at?: string | null;
+  created_at: string;
+}
+
+export interface RegistrationTokenCreate {
+  token?: string;
+  note?: string;
+  max_uses?: number;
+  expires_at?: string;
+}
+
+export interface AdminStats {
+  users_count: number;
+  active_users_count: number;
+  households_count: number;
+  receipts_count: number;
+  pending_receipts_count: number;
+  products_count: number;
+  total_spend: number;
+  active_registration_tokens_count: number;
+}
+
+export interface AdminUserUpdate {
+  full_name?: string;
+  is_active?: boolean;
+  is_superuser?: boolean;
+}
+
+export interface AdminHouseholdUpdate {
+  name?: string;
+  currency?: string;
+}
+
+export interface SystemInfo {
+  app_name: string;
+  version: string;
+  environment: string;
+  database: string;
+  python_version: string;
+  total_users: number;
+  total_households: number;
+  total_receipts: number;
+  server_time: string;
+}
+

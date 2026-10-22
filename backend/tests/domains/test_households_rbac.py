@@ -9,6 +9,7 @@ async def test_households_multi_tenant_isolation(client: AsyncClient):
         "email": "ana@ejemplo.com",
         "password": "PasswordAna123!",
         "full_name": "Ana García",
+        "registration_token": "TEST-TOKEN-1234",
     })
     assert user_a_res.status_code == 201
     token_a = user_a_res.json()["access_token"]
@@ -19,6 +20,7 @@ async def test_households_multi_tenant_isolation(client: AsyncClient):
         "email": "borja@ejemplo.com",
         "password": "PasswordBorja123!",
         "full_name": "Borja López",
+        "registration_token": "TEST-TOKEN-1234",
     })
     assert user_b_res.status_code == 201
     token_b = user_b_res.json()["access_token"]
@@ -80,4 +82,20 @@ async def test_households_multi_tenant_isolation(client: AsyncClient):
         "name": "Nombre No Autorizado",
     }, headers=headers_b)
     assert forbidden_update.status_code == 403
+
+    # 11. HOUSEHOLD ISOLATION CHECK: User B's empty household must have 0 receipts and 0 products
+    receipts_b = await client.get(f"/api/v1/receipts?household_id={household_b_id}", headers=headers_b)
+    assert receipts_b.status_code == 200
+    assert len(receipts_b.json()) == 0
+
+    products_b = await client.get(f"/api/v1/catalog/products?household_id={household_b_id}", headers=headers_b)
+    assert products_b.status_code == 200
+    assert len(products_b.json()) == 0
+
+    # 12. OWNER CAN RENAME HOUSEHOLD
+    rename_res = await client.patch(f"/api/v1/households/{shared_h_id}", json={
+        "name": "Casa de Campo Renombrada",
+    }, headers=headers_a)
+    assert rename_res.status_code == 200
+    assert rename_res.json()["name"] == "Casa de Campo Renombrada"
 

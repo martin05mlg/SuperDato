@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
-import { ShoppingBag, Lock, Mail, User as UserIcon, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Lock, Mail, User as UserIcon, AlertCircle, KeyRound } from 'lucide-react';
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -10,6 +10,7 @@ export const RegisterPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [registrationToken, setRegistrationToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,6 +24,7 @@ export const RegisterPage: React.FC = () => {
         email,
         password,
         full_name: fullName,
+        registration_token: registrationToken.trim(),
       });
 
       const { access_token, refresh_token, user } = response.data;
@@ -108,6 +110,31 @@ export const RegisterPage: React.FC = () => {
                   placeholder="••••••••"
                 />
               </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Token de Registro
+                </label>
+                <span className="text-[10px] text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded">
+                  Requerido por Superadmin
+                </span>
+              </div>
+              <div className="relative">
+                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  required
+                  value={registrationToken}
+                  onChange={(e) => setRegistrationToken(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 uppercase"
+                  placeholder="SUP-ADMIN-XXXX"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                El acceso a SuperDato es privado. Solicita un token de invitación a tu administrador.
+              </p>
             </div>
 
             <button

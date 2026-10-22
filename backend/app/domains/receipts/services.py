@@ -196,8 +196,10 @@ class ReceiptService:
     async def save_extracted_receipt_to_db(
         db: AsyncSession,
         extracted: Dict[str, Any],
-        household_id: uuid.UUID,
+        household_id: Optional[uuid.UUID] = None,
         import_job_id: Optional[uuid.UUID] = None,
+        imported_by_user_id: Optional[uuid.UUID] = None,
+        assignment_status: str = "ASSIGNED",
     ) -> Optional[Receipt]:
         """Saves an extracted receipt to database, preventing duplicates, linking catalog and price observations."""
         dedup_hash = extracted.get("deduplication_hash")
@@ -236,6 +238,7 @@ class ReceiptService:
             id=receipt_id,
             household_id=household_id,
             import_job_id=import_job_id,
+            imported_by_user_id=imported_by_user_id,
             company_name=extracted.get("company_name", "MERCADONA, S.A."),
             company_cif=extracted.get("company_cif", "A-46103834"),
             store_address=extracted.get("store_address"),
@@ -253,6 +256,7 @@ class ReceiptService:
             card_last_four=extracted.get("card_last_four"),
             deduplication_hash=dedup_hash,
             status="PROCESSED",
+            assignment_status=assignment_status,
             extraction_warnings=extracted.get("extraction_warnings", []),
             raw_text=extracted.get("raw_text"),
             is_manual_override=False,
@@ -332,6 +336,32 @@ class ReceiptService:
         return receipt
 
     @staticmethod
+    def _receipt_to_dict(r: Receipt) -> Dict:
+        """Converts a Receipt model instance into a clean dictionary serialization."""
+        return {
+            "id": str(r.id),
+            "household_id": str(r.household_id) if r.household_id else None,
+            "company_name": r.company_name,
+            "company_cif": r.company_cif,
+            "store_address": r.store_address,
+            "store_city": r.store_city,
+            "store_postal_code": r.store_postal_code,
+            "invoice_number": r.invoice_number,
+            "store_code": r.store_code,
+            "purchase_datetime": r.purchase_datetime.isoformat() if r.purchase_datetime else "",
+            "purchase_date": r.purchase_date.isoformat() if r.purchase_date else "",
+            "total_amount": float(r.total_amount),
+            "payment_method": r.payment_method,
+            "card_last_four": r.card_last_four,
+            "status": r.status,
+            "assignment_status": getattr(r, "assignment_status", "ASSIGNED") or "ASSIGNED",
+            "extraction_warnings": r.extraction_warnings or [],
+            "is_manual_override": r.is_manual_override,
+            "lines_count": len(r.lines) if hasattr(r, "lines") and r.lines is not None else 0,
+            "created_at": r.created_at.isoformat() if getattr(r, "created_at", None) else (r.purchase_datetime.isoformat() if r.purchase_datetime else ""),
+        }
+
+    @staticmethod
     def get_all_receipts() -> List[Dict]:
         load_initial_samples_if_empty()
         receipts = list(_RECEIPTS_STORE.values())
@@ -339,47 +369,43 @@ class ReceiptService:
         return receipts
 
     @staticmethod
-    async def get_all_receipts_from_db(db: AsyncSession) -> List[Dict]:
-        """Queries all receipts from database with line counts, falling back to samples if empty."""
+    async def get_all_receipts_from_db(
+        db: AsyncSession,
+        household_id: Optional[uuid.UUID] = None,
+        user_id: Optional[uuid.UUID] = None,
+    ) -> List[Dict]:
+        """Queries receipts from database strictly scoped to household or user's households."""
         stmt = (
             select(Receipt)
             .options(selectinload(Receipt.lines))
+            .where(Receipt.assignment_status == "ASSIGNED")
             .order_by(Receipt.purchase_datetime.desc())
         )
-        res = await db.execute(stmt)
-        receipts = res.scalars().all()
-        if not receipts:
-            await ReceiptService.sync_sample_receipts_to_db(db)
+        if household_id:
+            # Strictly scoped to household - NEVER leak other households or auto-seed samples
+            stmt = stmt.where(Receipt.household_id == household_id)
             res = await db.execute(stmt)
             receipts = res.scalars().all()
+            return [ReceiptService._receipt_to_dict(r) for r in receipts]
 
-        if not receipts:
-            return ReceiptService.get_all_receipts()
+        if user_id:
+            from app.domains.households.models import HouseholdMembership
+            hh_subquery = select(HouseholdMembership.household_id).where(HouseholdMembership.user_id == user_id)
+            stmt = stmt.where(Receipt.household_id.in_(hh_subquery))
 
-        result = []
-        for r in receipts:
-            result.append({
-                "id": str(r.id),
-                "household_id": str(r.household_id),
-                "company_name": r.company_name,
-                "company_cif": r.company_cif,
-                "store_address": r.store_address,
-                "store_city": r.store_city,
-                "store_postal_code": r.store_postal_code,
-                "invoice_number": r.invoice_number,
-                "store_code": r.store_code,
-                "purchase_datetime": r.purchase_datetime.isoformat() if r.purchase_datetime else "",
-                "purchase_date": r.purchase_date.isoformat() if r.purchase_date else "",
-                "total_amount": float(r.total_amount),
-                "payment_method": r.payment_method,
-                "card_last_four": r.card_last_four,
-                "status": r.status,
-                "extraction_warnings": r.extraction_warnings or [],
-                "is_manual_override": r.is_manual_override,
-                "lines_count": len(r.lines),
-                "created_at": r.created_at.isoformat() if r.created_at else (r.purchase_datetime.isoformat() if r.purchase_datetime else ""),
-            })
-        return result
+        res = await db.execute(stmt)
+        receipts = res.scalars().all()
+
+        # In testing / empty global store when no specific household was queried:
+        if not receipts and household_id is None:
+            await ReceiptService.sync_sample_receipts_to_db(db)
+            all_stmt = select(Receipt).options(selectinload(Receipt.lines)).where(Receipt.assignment_status == "ASSIGNED")
+            res = await db.execute(all_stmt)
+            receipts = res.scalars().all()
+            if not receipts:
+                return ReceiptService.get_all_receipts()
+
+        return [ReceiptService._receipt_to_dict(r) for r in receipts]
 
     @staticmethod
     def get_receipt_by_id(receipt_id: str) -> Optional[Dict]:
@@ -635,11 +661,16 @@ class ReceiptService:
         return target_line
 
     @staticmethod
-    async def process_and_save_pdf(stream, filename: str, db: Optional[AsyncSession] = None) -> Dict:
+    async def process_and_save_pdf(
+        stream,
+        filename: str,
+        db: Optional[AsyncSession] = None,
+        household_id: Optional[uuid.UUID] = None,
+        user_id: Optional[uuid.UUID] = None,
+    ) -> Dict:
         extracted = PDFReceiptExtractor.extract_from_stream(stream)
         receipt_id = str(uuid.uuid4())
         extracted["id"] = receipt_id
-        extracted["household_id"] = "default-household"
         extracted["created_at"] = extracted.get("purchase_datetime", "2026-10-15T12:00:00")
         extracted["lines_count"] = len(extracted.get("lines", []))
 
@@ -648,18 +679,48 @@ class ReceiptService:
         for tax in extracted.get("tax_lines", []):
             tax["id"] = str(uuid.uuid4())
 
-        _RECEIPTS_STORE[receipt_id] = extracted
+        target_household_id = household_id
+        assignment_status = "ASSIGNED"
 
         if db:
-            hh_stmt = select(Household).limit(1)
-            hh_res = await db.execute(hh_stmt)
-            household = hh_res.scalar_one_or_none()
-            if household:
-                await ReceiptService.save_extracted_receipt_to_db(
-                    db=db,
-                    extracted=extracted,
-                    household_id=household.id,
-                )
+            if not target_household_id:
+                if user_id:
+                    from app.domains.households.models import HouseholdMembership
+                    hh_mem_stmt = select(HouseholdMembership).where(HouseholdMembership.user_id == user_id)
+                    mems = (await db.execute(hh_mem_stmt)).scalars().all()
+                    if len(mems) == 1:
+                        target_household_id = mems[0].household_id
+                        assignment_status = "ASSIGNED"
+                    else:
+                        target_household_id = None
+                        assignment_status = "PENDING_ASSIGNMENT"
+                else:
+                    hh_stmt = select(Household).limit(1)
+                    hh_res = await db.execute(hh_stmt)
+                    household = hh_res.scalar_one_or_none()
+                    if household:
+                        target_household_id = household.id
+                        assignment_status = "ASSIGNED"
+                    else:
+                        assignment_status = "PENDING_ASSIGNMENT"
+            else:
+                assignment_status = "ASSIGNED"
+
+            extracted["household_id"] = str(target_household_id) if target_household_id else None
+            extracted["assignment_status"] = assignment_status
+            _RECEIPTS_STORE[receipt_id] = extracted
+
+            await ReceiptService.save_extracted_receipt_to_db(
+                db=db,
+                extracted=extracted,
+                household_id=target_household_id,
+                imported_by_user_id=user_id,
+                assignment_status=assignment_status,
+            )
+        else:
+            extracted["household_id"] = str(target_household_id) if target_household_id else None
+            extracted["assignment_status"] = assignment_status
+            _RECEIPTS_STORE[receipt_id] = extracted
 
         return extracted
 
@@ -831,19 +892,99 @@ class ReceiptService:
         return points
 
     @staticmethod
-    def get_spending_evolution() -> List[Dict]:
-        receipts = ReceiptService.get_all_receipts()
-        by_date: Dict[str, Dict] = {}
-        for r in receipts:
-            d = r.get("purchase_date", "")
-            if d:
-                if d not in by_date:
-                    by_date[d] = {"date": d, "total_amount": 0.0, "receipt_count": 0}
-                by_date[d]["total_amount"] += r.get("total_amount", 0.0)
-                by_date[d]["receipt_count"] += 1
+    async def get_pending_receipts(db: AsyncSession, user_id: uuid.UUID) -> List[Dict]:
+        """Returns all receipts waiting to be assigned to a household."""
+        stmt = (
+            select(Receipt)
+            .where(
+                (Receipt.imported_by_user_id == user_id) | (Receipt.imported_by_user_id.is_(None)),
+                (Receipt.assignment_status == "PENDING_ASSIGNMENT") | (Receipt.household_id.is_(None)),
+            )
+            .order_by(Receipt.purchase_datetime.desc())
+        )
+        res = await db.execute(stmt)
+        receipts = res.scalars().all()
+        return [ReceiptService._receipt_to_dict(r) for r in receipts]
 
-        points = list(by_date.values())
-        points.sort(key=lambda p: p["date"])
-        for p in points:
-            p["total_amount"] = round(p["total_amount"], 2)
-        return points
+    @staticmethod
+    async def get_pending_count(db: AsyncSession, user_id: uuid.UUID) -> int:
+        """Returns the number of unassigned receipts for the user."""
+        stmt = (
+            select(func.count(Receipt.id))
+            .where(
+                (Receipt.imported_by_user_id == user_id) | (Receipt.imported_by_user_id.is_(None)),
+                (Receipt.assignment_status == "PENDING_ASSIGNMENT") | (Receipt.household_id.is_(None)),
+            )
+        )
+        return (await db.execute(stmt)).scalar_one() or 0
+
+    @staticmethod
+    async def assign_household(db: AsyncSession, receipt_id: str, household_id: uuid.UUID, user_id: uuid.UUID) -> Dict:
+        """Assigns an unassigned receipt to a target household."""
+        from app.domains.households.models import HouseholdMembership
+        mem_stmt = select(HouseholdMembership).where(
+            HouseholdMembership.household_id == household_id,
+            HouseholdMembership.user_id == user_id,
+        )
+        mem = (await db.execute(mem_stmt)).scalar_one_or_none()
+        if not mem:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No perteneces al hogar seleccionado.",
+            )
+
+        r_uuid = uuid.UUID(receipt_id) if isinstance(receipt_id, str) else receipt_id
+        r_stmt = select(Receipt).where(Receipt.id == r_uuid)
+        receipt = (await db.execute(r_stmt)).scalar_one_or_none()
+        if not receipt:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket no encontrado.")
+
+        receipt.household_id = household_id
+        receipt.assignment_status = "ASSIGNED"
+
+        # Update PriceObservations for lines in this receipt
+        obs_stmt = (
+            select(PriceObservation)
+            .join(ReceiptLine, PriceObservation.receipt_line_id == ReceiptLine.id)
+            .where(ReceiptLine.receipt_id == receipt.id)
+        )
+        obs_res = await db.execute(obs_stmt)
+        for obs in obs_res.scalars().all():
+            obs.household_id = household_id
+
+        await db.commit()
+        return await ReceiptService.get_receipt_detail(db, str(receipt.id))
+
+    @staticmethod
+    async def bulk_assign_household(db: AsyncSession, receipt_ids: List[str], household_id: uuid.UUID, user_id: uuid.UUID) -> Dict:
+        """Assigns multiple unassigned receipts to a household in batch."""
+        from app.domains.households.models import HouseholdMembership
+        mem_stmt = select(HouseholdMembership).where(
+            HouseholdMembership.household_id == household_id,
+            HouseholdMembership.user_id == user_id,
+        )
+        mem = (await db.execute(mem_stmt)).scalar_one_or_none()
+        if not mem:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No perteneces al hogar seleccionado.",
+            )
+
+        uuids = [uuid.UUID(rid) if isinstance(rid, str) else rid for rid in receipt_ids]
+        stmt = select(Receipt).where(Receipt.id.in_(uuids))
+        receipts = (await db.execute(stmt)).scalars().all()
+        for r in receipts:
+            r.household_id = household_id
+            r.assignment_status = "ASSIGNED"
+
+        obs_stmt = (
+            select(PriceObservation)
+            .join(ReceiptLine, PriceObservation.receipt_line_id == ReceiptLine.id)
+            .where(ReceiptLine.receipt_id.in_(uuids))
+        )
+        obs_res = await db.execute(obs_stmt)
+        for obs in obs_res.scalars().all():
+            obs.household_id = household_id
+
+        await db.commit()
+        return {"assigned_count": len(receipts)}

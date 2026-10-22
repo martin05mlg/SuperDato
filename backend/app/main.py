@@ -38,6 +38,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,6 +51,7 @@ from app.domains.receipts.router import router as receipts_router
 from app.domains.catalog.router import router as catalog_router
 from app.domains.analytics.router import router as analytics_router
 from app.domains.integrations.router import router as integrations_router
+from app.domains.admin.router import router as admin_router
 
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
 app.include_router(households_router, prefix=settings.API_V1_PREFIX)
@@ -57,6 +59,7 @@ app.include_router(receipts_router, prefix=settings.API_V1_PREFIX)
 app.include_router(catalog_router, prefix=settings.API_V1_PREFIX)
 app.include_router(analytics_router, prefix=settings.API_V1_PREFIX)
 app.include_router(integrations_router, prefix=settings.API_V1_PREFIX)
+app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/", tags=["Root"])
