@@ -3,8 +3,8 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_list_receipts_returns_samples(client: AsyncClient):
-    response = await client.get("/api/v1/receipts")
+async def test_list_receipts_returns_samples(auth_client: AsyncClient):
+    response = await auth_client.get("/api/v1/receipts")
     assert response.status_code == 200
     receipts = response.json()
     assert len(receipts) >= 2
@@ -17,12 +17,12 @@ async def test_list_receipts_returns_samples(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_receipt_detail(client: AsyncClient):
+async def test_get_receipt_detail(auth_client: AsyncClient):
     # List first
-    list_res = await client.get("/api/v1/receipts")
+    list_res = await auth_client.get("/api/v1/receipts")
     receipt_id = list_res.json()[0]["id"]
 
-    detail_res = await client.get(f"/api/v1/receipts/{receipt_id}")
+    detail_res = await auth_client.get(f"/api/v1/receipts/{receipt_id}")
     assert detail_res.status_code == 200
     detail = detail_res.json()
     assert len(detail["lines"]) > 0
@@ -37,14 +37,14 @@ async def test_get_receipt_detail(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_update_receipt_line_via_api(client: AsyncClient):
-    list_res = await client.get("/api/v1/receipts")
+async def test_update_receipt_line_via_api(auth_client: AsyncClient):
+    list_res = await auth_client.get("/api/v1/receipts")
     receipt_id = list_res.json()[0]["id"]
 
-    detail_res = await client.get(f"/api/v1/receipts/{receipt_id}")
+    detail_res = await auth_client.get(f"/api/v1/receipts/{receipt_id}")
     line_id = detail_res.json()["lines"][0]["id"]
 
-    patch_res = await client.patch(
+    patch_res = await auth_client.patch(
         f"/api/v1/receipts/{receipt_id}/lines/{line_id}",
         json={"unit_price": 12.50, "line_total": 12.50},
     )
@@ -56,8 +56,8 @@ async def test_update_receipt_line_via_api(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_analytics_summary(client: AsyncClient):
-    response = await client.get("/api/v1/analytics/summary")
+async def test_analytics_summary(auth_client: AsyncClient):
+    response = await auth_client.get("/api/v1/analytics/summary")
     assert response.status_code == 200
     summary = response.json()
     assert summary["receipt_count"] >= 2
@@ -66,8 +66,8 @@ async def test_analytics_summary(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_category_distribution(client: AsyncClient):
-    response = await client.get("/api/v1/analytics/category-distribution")
+async def test_category_distribution(auth_client: AsyncClient):
+    response = await auth_client.get("/api/v1/analytics/category-distribution")
     assert response.status_code == 200
     dist = response.json()
     assert len(dist) > 0
@@ -76,8 +76,8 @@ async def test_category_distribution(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_top_products_analytics(client: AsyncClient):
-    response = await client.get("/api/v1/analytics/top-products?limit=5")
+async def test_top_products_analytics(auth_client: AsyncClient):
+    response = await auth_client.get("/api/v1/analytics/top-products?limit=5")
     assert response.status_code == 200
     top = response.json()
     assert len(top) > 0
@@ -87,8 +87,8 @@ async def test_top_products_analytics(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_analytics_with_date_range(client: AsyncClient):
-    response = await client.get("/api/v1/analytics/summary?start_date=2026-01-01&end_date=2026-12-31")
+async def test_analytics_with_date_range(auth_client: AsyncClient):
+    response = await auth_client.get("/api/v1/analytics/summary?start_date=2026-01-01&end_date=2026-12-31")
     assert response.status_code == 200
     data = response.json()
     assert "total_spend" in data

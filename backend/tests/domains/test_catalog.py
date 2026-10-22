@@ -135,17 +135,17 @@ async def test_manual_override_on_receipt_line():
 
 
 @pytest.mark.asyncio
-async def test_catalog_api_endpoints(client: AsyncClient):
+async def test_catalog_api_endpoints(auth_client: AsyncClient):
     """Tests the REST API routes for categories, products, aliases, and price history."""
     # 1. GET /api/v1/catalog/categories
-    cat_res = await client.get("/api/v1/catalog/categories")
+    cat_res = await auth_client.get("/api/v1/catalog/categories")
     assert cat_res.status_code == 200
     categories = cat_res.json()
     assert len(categories) >= 12
     cat_id = categories[0]["id"]
 
     # 2. POST /api/v1/catalog/products
-    new_prod_res = await client.post("/api/v1/catalog/products", json={
+    new_prod_res = await auth_client.post("/api/v1/catalog/products", json={
         "canonical_name": "Aceite de Oliva Virgen Extra 1L",
         "category_id": cat_id,
         "default_unit": "ud",
@@ -158,13 +158,13 @@ async def test_catalog_api_endpoints(client: AsyncClient):
     assert prod_data["canonical_name"] == "Aceite de Oliva Virgen Extra 1L"
 
     # 3. GET /api/v1/catalog/products
-    list_res = await client.get("/api/v1/catalog/products")
+    list_res = await auth_client.get("/api/v1/catalog/products")
     assert list_res.status_code == 200
     products = list_res.json()
     assert any(p["id"] == product_id for p in products)
 
     # 4. POST /api/v1/catalog/products/{id}/aliases
-    alias_res = await client.post(f"/api/v1/catalog/products/{product_id}/aliases", json={
+    alias_res = await auth_client.post(f"/api/v1/catalog/products/{product_id}/aliases", json={
         "raw_name_normalized": "AOVE 1L HACENDADO",
         "source": "MERCADONA",
     })
@@ -172,7 +172,7 @@ async def test_catalog_api_endpoints(client: AsyncClient):
     assert alias_res.json()["raw_name_normalized"] == "AOVE 1L HACENDADO"
 
     # 5. GET /api/v1/catalog/products/{id}/price-history
-    history_res = await client.get(f"/api/v1/catalog/products/{product_id}/price-history")
+    history_res = await auth_client.get(f"/api/v1/catalog/products/{product_id}/price-history")
     assert history_res.status_code == 200
     assert history_res.json()["product_name"] == "Aceite de Oliva Virgen Extra 1L"
 
@@ -255,7 +255,7 @@ async def test_mercadona_matcher_service(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_mercadona_api_manual_binding_and_search(client: AsyncClient, db_session: AsyncSession):
+async def test_mercadona_api_manual_binding_and_search(auth_client: AsyncClient, db_session: AsyncSession):
     """Tests search, suggestions, confirm match, and reject match endpoints."""
     from app.domains.catalog.models import MercadonaOnlineProduct
 
@@ -285,13 +285,13 @@ async def test_mercadona_api_manual_binding_and_search(client: AsyncClient, db_s
     await db_session.commit()
 
     # 2. GET /api/v1/catalog/mercadona/search?query=maria
-    search_res = await client.get("/api/v1/catalog/mercadona/search?query=maria")
+    search_res = await auth_client.get("/api/v1/catalog/mercadona/search?query=maria")
     assert search_res.status_code == 200
     search_results = search_res.json()
     assert any(p["id"] == "112233" for p in search_results)
 
     # 3. POST /api/v1/catalog/mercadona/confirm-match
-    confirm_res = await client.post("/api/v1/catalog/mercadona/confirm-match", json={
+    confirm_res = await auth_client.post("/api/v1/catalog/mercadona/confirm-match", json={
         "product_id": str(local_item.id),
         "mercadona_online_id": "112233",
     })
@@ -302,7 +302,7 @@ async def test_mercadona_api_manual_binding_and_search(client: AsyncClient, db_s
     assert confirmed_data["brand"] == "Hacendado"
 
     # 4. POST /api/v1/catalog/mercadona/reject-match
-    reject_res = await client.post("/api/v1/catalog/mercadona/reject-match", json={
+    reject_res = await auth_client.post("/api/v1/catalog/mercadona/reject-match", json={
         "product_id": str(local_item.id),
     })
     assert reject_res.status_code == 200
@@ -312,7 +312,7 @@ async def test_mercadona_api_manual_binding_and_search(client: AsyncClient, db_s
 
 
 @pytest.mark.asyncio
-async def test_intelligent_categorizer_and_persistence(client: AsyncClient, db_session: AsyncSession):
+async def test_intelligent_categorizer_and_persistence(auth_client: AsyncClient, db_session: AsyncSession):
     """
     Tests:
     1. Intelligent classification heuristics for vegetables, fish, meats, dairy, bread, etc.
@@ -357,7 +357,7 @@ async def test_intelligent_categorizer_and_persistence(client: AsyncClient, db_s
     await db_session.commit()
 
     # Call /api/v1/catalog/recategorize-all
-    recat_res = await client.post("/api/v1/catalog/recategorize-all?only_otros=true")
+    recat_res = await auth_client.post("/api/v1/catalog/recategorize-all?only_otros=true")
     assert recat_res.status_code == 200
     recat_data = recat_res.json()
     assert recat_data["status"] == "success"
@@ -369,7 +369,7 @@ async def test_intelligent_categorizer_and_persistence(client: AsyncClient, db_s
 
     # 3. User manual edit persistence
     # Suppose user manually changes it to 'platos-preparados'
-    update_res = await client.patch(f"/api/v1/catalog/products/{sample_prod.id}", json={
+    update_res = await auth_client.patch(f"/api/v1/catalog/products/{sample_prod.id}", json={
         "category_id": str(cat["platos-preparados"].id),
     })
     assert update_res.status_code == 200

@@ -68,29 +68,11 @@ async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Validates the JWT access token or falls back to dev user in development mode."""
+    """Validates the JWT access token and returns the authenticated active user."""
     if not credentials:
-        if settings.ENVIRONMENT in ["development", "testing"]:
-            result = await db.execute(select(User).where(User.id == DEV_USER_ID))
-            dev_user = result.scalar_one_or_none()
-            if not dev_user:
-                dev_user = User(
-                    id=DEV_USER_ID,
-                    email="dev@superdato.es",
-                    hashed_password="mock_dev_password",
-                    full_name="Usuario Desarrollo",
-                    is_active=True,
-                    is_verified=True,
-                    is_superuser=True,
-                )
-                db.add(dev_user)
-                await db.commit()
-                await db.refresh(dev_user)
-            return dev_user
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Autenticación requerida.",
+            detail="Autenticación requerida. Token de acceso no proporcionado.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -125,8 +107,8 @@ async def get_current_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado o sesión caducada.",
         )
 
     if not user.is_active:
@@ -157,38 +139,6 @@ def require_household_permission(required_permission: Permission):
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> HouseholdMembership:
-        # In dev mode, auto-ensure dev household and OWNER membership
-        if current_user.id == DEV_USER_ID:
-            # Ensure household exists
-            hh = await db.get(Household, household_id)
-            if not hh:
-                hh = Household(
-                    id=household_id,
-                    name="Casa Principal",
-                    currency="EUR",
-                    created_by_user_id=DEV_USER_ID,
-                )
-                db.add(hh)
-                await db.commit()
-
-            q = select(HouseholdMembership).where(
-                HouseholdMembership.household_id == household_id,
-                HouseholdMembership.user_id == DEV_USER_ID,
-            )
-            res = await db.execute(q)
-            membership = res.scalar_one_or_none()
-            if not membership:
-                membership = HouseholdMembership(
-                    id=uuid.uuid4(),
-                    household_id=household_id,
-                    user_id=DEV_USER_ID,
-                    role="OWNER",
-                )
-                db.add(membership)
-                await db.commit()
-                await db.refresh(membership)
-            return membership
-
         # Standard multi-tenant isolation verification
         query = select(HouseholdMembership).where(
             HouseholdMembership.household_id == household_id,
@@ -198,6 +148,14 @@ def require_household_permission(required_permission: Permission):
         membership = result.scalar_one_or_none()
 
         if not membership:
+            if current_user.is_superuser:
+                # Superuser administrative pass-through
+                return HouseholdMembership(
+                    id=uuid.uuid4(),
+                    household_id=household_id,
+                    user_id=current_user.id,
+                    role="OWNER",
+                )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acceso denegado: No perteneces a este hogar.",
@@ -206,7 +164,7 @@ def require_household_permission(required_permission: Permission):
         role = Role(membership.role)
         allowed_permissions = ROLE_PERMISSIONS.get(role, set())
 
-        if required_permission not in allowed_permissions:
+        if required_permission not in allowed_permissions and not current_user.is_superuser:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permiso insuficiente: La acción requiere '{required_permission.value}'.",

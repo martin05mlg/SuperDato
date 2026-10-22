@@ -76,3 +76,51 @@ async def client(db_session: AsyncSession) -> AsyncClient:
         yield ac
     app.dependency_overrides.clear()
 
+
+@pytest_asyncio.fixture(scope="function")
+async def test_user(db_session: AsyncSession):
+    import uuid
+    from app.domains.auth.models import User
+    from app.domains.households.models import Household, HouseholdMembership
+
+    user = User(
+        id=uuid.uuid4(),
+        email="test_admin@superdato.es",
+        hashed_password="mock_password",
+        full_name="Usuario Admin Test",
+        is_active=True,
+        is_verified=True,
+        is_superuser=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    household = Household(
+        id=uuid.uuid4(),
+        name="Casa Principal Test",
+        currency="EUR",
+        created_by_user_id=user.id,
+    )
+    db_session.add(household)
+    await db_session.flush()
+
+    membership = HouseholdMembership(
+        id=uuid.uuid4(),
+        household_id=household.id,
+        user_id=user.id,
+        role="OWNER",
+    )
+    db_session.add(membership)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_client(client: AsyncClient, test_user) -> AsyncClient:
+    from app.core.security import create_access_token
+    token = create_access_token(subject=str(test_user.id))
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client
+
+

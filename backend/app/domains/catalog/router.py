@@ -6,6 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.domains.auth.models import User
+from app.domains.households.models import HouseholdMembership
+from app.domains.households.permissions import get_current_user
 from app.domains.catalog.matcher import MercadonaMatcherService, normalize_string
 from app.domains.catalog.mercadona_client import MercadonaStorefrontClient
 from app.domains.catalog.models import Category, MercadonaOnlineProduct, Product, ProductAlias
@@ -30,6 +33,26 @@ from app.domains.catalog.schemas import (
 from app.domains.catalog.services import CatalogService
 
 router = APIRouter(prefix="/catalog", tags=["Catálogo y Precios"])
+
+
+async def verify_household_access(
+    household_id: Optional[uuid.UUID],
+    current_user: User,
+    db: AsyncSession,
+) -> None:
+    """Verifies that the current user belongs to the target household."""
+    if household_id and not current_user.is_superuser:
+        res = await db.execute(
+            select(HouseholdMembership).where(
+                HouseholdMembership.household_id == household_id,
+                HouseholdMembership.user_id == current_user.id,
+            )
+        )
+        if not res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: No perteneces a este hogar.",
+            )
 
 
 def format_product_dict(prod: Product, obs_list=None, category=None, aliases=None) -> dict:
@@ -78,9 +101,11 @@ def format_product_dict(prod: Product, obs_list=None, category=None, aliases=Non
 @router.get("/categories", response_model=List[CategoryResponse])
 async def list_categories(
     household_id: Optional[uuid.UUID] = Query(None, description="Filtrar conteos por hogar"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns the full product category hierarchy with active item counts."""
+    await verify_household_access(household_id, current_user, db)
     return await CatalogService.list_categories(db, household_id=household_id)
 
 
@@ -91,9 +116,11 @@ async def list_products(
     search: Optional[str] = Query(None, description="Búsqueda por nombre de producto o alias"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Lists normalized canonical products with their latest observed price and inflation metrics for the given household."""
+    await verify_household_access(household_id, current_user, db)
     return await CatalogService.list_products(
         db,
         household_id=household_id,
@@ -107,6 +134,7 @@ async def list_products(
 @router.get("/products/{product_id}", response_model=ProductResponse)
 async def get_product(
     product_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieves single product details and registered aliases."""
@@ -132,9 +160,11 @@ async def get_product(
 async def get_product_price_history(
     product_id: uuid.UUID,
     household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por casa específica"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns the immutable historical price observations for this product."""
+    await verify_household_access(household_id, current_user, db)
     history = await CatalogService.get_product_price_history(db, product_id, household_id)
     if not history:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
@@ -144,6 +174,7 @@ async def get_product_price_history(
 @router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(
     data: ProductCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Creates a new canonical product and associates an optional initial alias."""
@@ -197,6 +228,7 @@ async def create_product(
 async def update_product(
     product_id: uuid.UUID,
     data: ProductUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Updates product attributes (canonical name, category, default unit)."""
@@ -231,6 +263,7 @@ async def update_product(
 async def add_product_alias(
     product_id: uuid.UUID,
     data: ProductAliasCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Registers an alternate ticket text alias mapped to this canonical product."""
@@ -270,6 +303,7 @@ async def add_product_alias(
 @router.post("/mercadona/sync", response_model=MercadonaSyncResponse)
 async def sync_mercadona_catalog(
     data: Optional[MercadonaSyncRequest] = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Downloads official catalog hierarchy and products from Mercadona Online for a given postal code."""
@@ -283,6 +317,7 @@ async def sync_mercadona_catalog(
 @router.post("/mercadona/enrich", response_model=MercadonaEnrichResponse)
 async def enrich_products(
     data: Optional[MercadonaEnrichRequest] = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Executes fuzzy matching between local canonical products and downloaded Mercadona catalog."""
@@ -295,9 +330,11 @@ async def enrich_products(
 async def get_mercadona_suggestions(
     household_id: Optional[uuid.UUID] = Query(None, description="Filtrar sugerencias por hogar"),
     limit_products: int = Query(25, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns products that have moderate-confidence matching suggestions (score 0.50 - 0.84) or are unenriched for the household."""
+    await verify_household_access(household_id, current_user, db)
     from app.domains.catalog.models import PriceObservation
     online_stmt = select(MercadonaOnlineProduct)
     online_res = await db.execute(online_stmt)
@@ -360,6 +397,7 @@ async def get_mercadona_suggestions(
 @router.post("/mercadona/confirm-match", response_model=ProductResponse)
 async def confirm_match(
     data: MercadonaConfirmMatchRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Manually confirms binding between a canonical product and a Mercadona online item via ID or URL."""
@@ -473,6 +511,7 @@ async def confirm_match(
 @router.post("/mercadona/reject-match", response_model=ProductResponse)
 async def reject_match(
     data: MercadonaRejectMatchRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Rejects automatic or suggested match for a product."""
@@ -509,6 +548,7 @@ async def reject_match(
 async def search_mercadona_online(
     query: str = Query(..., min_length=2),
     limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Searches the local snapshot of Mercadona Online products."""
@@ -536,6 +576,7 @@ async def search_mercadona_online(
 @router.post("/recategorize-all")
 async def recategorize_all_products(
     only_otros: bool = Query(True, description="Si es True, sólo reclasifica productos que actualmente están en 'Otros'"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """

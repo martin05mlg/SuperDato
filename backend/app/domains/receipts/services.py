@@ -919,12 +919,15 @@ class ReceiptService:
         return (await db.execute(stmt)).scalar_one() or 0
 
     @staticmethod
-    async def assign_household(db: AsyncSession, receipt_id: str, household_id: uuid.UUID, user_id: uuid.UUID) -> Dict:
+    async def assign_household(db: AsyncSession, receipt_id: str, household_id: Any, user_id: Any) -> Dict:
         """Assigns an unassigned receipt to a target household."""
         from app.domains.households.models import HouseholdMembership
+        u_uuid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        h_uuid = uuid.UUID(str(household_id)) if not isinstance(household_id, uuid.UUID) else household_id
+
         mem_stmt = select(HouseholdMembership).where(
-            HouseholdMembership.household_id == household_id,
-            HouseholdMembership.user_id == user_id,
+            HouseholdMembership.household_id == h_uuid,
+            HouseholdMembership.user_id == u_uuid,
         )
         mem = (await db.execute(mem_stmt)).scalar_one_or_none()
         if not mem:
@@ -956,12 +959,15 @@ class ReceiptService:
         return await ReceiptService.get_receipt_detail(db, str(receipt.id))
 
     @staticmethod
-    async def bulk_assign_household(db: AsyncSession, receipt_ids: List[str], household_id: uuid.UUID, user_id: uuid.UUID) -> Dict:
+    async def bulk_assign_household(db: AsyncSession, receipt_ids: List[str], household_id: Any, user_id: Any) -> Dict:
         """Assigns multiple unassigned receipts to a household in batch."""
         from app.domains.households.models import HouseholdMembership
+        u_uuid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        h_uuid = uuid.UUID(str(household_id)) if not isinstance(household_id, uuid.UUID) else household_id
+
         mem_stmt = select(HouseholdMembership).where(
-            HouseholdMembership.household_id == household_id,
-            HouseholdMembership.user_id == user_id,
+            HouseholdMembership.household_id == h_uuid,
+            HouseholdMembership.user_id == u_uuid,
         )
         mem = (await db.execute(mem_stmt)).scalar_one_or_none()
         if not mem:
