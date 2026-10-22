@@ -1,5 +1,13 @@
 import { apiClient } from './client';
-import type { Category, PriceHistory, Product } from '../types';
+import type {
+  Category,
+  MercadonaEnrichResponse,
+  MercadonaOnlineProduct,
+  MercadonaSuggestionItem,
+  MercadonaSyncResponse,
+  PriceHistory,
+  Product,
+} from '../types';
 
 export interface ProductFilters {
   category_id?: string;
@@ -65,6 +73,51 @@ export const catalogApi = {
     }
   ) => {
     const res = await apiClient.post(`/catalog/products/${productId}/aliases`, data);
+    return res.data;
+  },
+
+  // Mercadona Online Integration
+  syncMercadonaCatalog: async (postalCode?: string, limitSubcategories?: number): Promise<MercadonaSyncResponse> => {
+    const res = await apiClient.post<MercadonaSyncResponse>('/catalog/mercadona/sync', {
+      postal_code: postalCode,
+      limit_subcategories: limitSubcategories,
+    });
+    return res.data;
+  },
+
+  enrichMercadonaProducts: async (autoThreshold?: number): Promise<MercadonaEnrichResponse> => {
+    const res = await apiClient.post<MercadonaEnrichResponse>('/catalog/mercadona/enrich', {
+      auto_threshold: autoThreshold ?? 0.85,
+    });
+    return res.data;
+  },
+
+  getMercadonaSuggestions: async (limitProducts?: number): Promise<MercadonaSuggestionItem[]> => {
+    const res = await apiClient.get<MercadonaSuggestionItem[]>('/catalog/mercadona/suggestions', {
+      params: limitProducts ? { limit_products: limitProducts } : undefined,
+    });
+    return res.data;
+  },
+
+  confirmMercadonaMatch: async (productId: string, mercadonaOnlineId: string): Promise<Product> => {
+    const res = await apiClient.post<Product>('/catalog/mercadona/confirm-match', {
+      product_id: productId,
+      mercadona_online_id: mercadonaOnlineId,
+    });
+    return res.data;
+  },
+
+  rejectMercadonaMatch: async (productId: string): Promise<Product> => {
+    const res = await apiClient.post<Product>('/catalog/mercadona/reject-match', {
+      product_id: productId,
+    });
+    return res.data;
+  },
+
+  searchMercadonaOnline: async (query: string): Promise<MercadonaOnlineProduct[]> => {
+    const res = await apiClient.get<MercadonaOnlineProduct[]>('/catalog/mercadona/search', {
+      params: { query },
+    });
     return res.data;
   },
 };

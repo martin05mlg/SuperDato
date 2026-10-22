@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, timezone
-from typing import List, Optional
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text, Uuid
+from typing import Any, Dict, List, Optional
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text, Uuid, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base, TimestampMixin
 
@@ -88,6 +88,43 @@ class Product(Base, TimestampMixin):
     )
     format_description: Mapped[Optional[str]] = mapped_column(
         String(100),
+        nullable=True,
+    )
+
+    # Mercadona Online Enrichment fields
+    mercadona_online_id: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        index=True,
+    )
+    enriched_name: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    image_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    brand: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+    )
+    packaging: Mapped[Optional[str]] = mapped_column(
+        String(150),
+        nullable=True,
+    )
+    mercadona_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    enrichment_status: Mapped[str] = mapped_column(
+        String(30),
+        default="NONE",  # 'NONE', 'AUTO', 'MANUALLY_CONFIRMED'
+        nullable=False,
+    )
+    enrichment_confidence: Mapped[Optional[float]] = mapped_column(
+        Numeric(4, 3),
         nullable=True,
     )
 
@@ -214,4 +251,76 @@ class PriceObservation(Base):
         "ReceiptLine",
         back_populates="price_observation",
     )
+
+
+class MercadonaOnlineProduct(Base, TimestampMixin):
+    """Snapshot of products cached from Mercadona Online Storefront."""
+    __tablename__ = "mercadona_online_products"
+
+    id: Mapped[str] = mapped_column(
+        String(50),
+        primary_key=True,  # Mercadona online product ID, ej. "34210"
+    )
+    display_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+    slug: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+    brand: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+    )
+    packaging: Mapped[Optional[str]] = mapped_column(
+        String(150),
+        nullable=True,
+    )
+    thumbnail_url: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    share_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    reference_price: Mapped[Optional[float]] = mapped_column(
+        Numeric(10, 3),
+        nullable=True,
+    )
+    reference_format: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    unit_price: Mapped[Optional[float]] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+    )
+    category_path: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    warehouse_code: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+    )
+    raw_payload: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+    last_synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+# Register receipts models in DeclarativeBase registry
+import app.domains.receipts.models  # noqa: F401
+
+
 

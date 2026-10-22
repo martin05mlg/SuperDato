@@ -18,6 +18,10 @@ class ReceiptLineResponse(BaseModel):
     weight_in_kg: Optional[float] = None
     validation_status: str = "VALID"
     is_manual_override: bool = False
+    image_url: Optional[str] = None
+    brand: Optional[str] = None
+    enriched_name: Optional[str] = None
+    packaging: Optional[str] = None
 
 
 class ReceiptLineUpdate(BaseModel):

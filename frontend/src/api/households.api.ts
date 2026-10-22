@@ -22,6 +22,14 @@ export const householdsApi = {
     return res.data;
   },
 
+  update: async (
+    householdId: string,
+    data: { name?: string; currency?: string; settings?: Record<string, any> }
+  ): Promise<Household> => {
+    const res = await apiClient.patch<Household>(`/households/${householdId}`, data);
+    return res.data;
+  },
+
   getMembers: async (householdId: string): Promise<HouseholdMembership[]> => {
     const res = await apiClient.get<HouseholdMembership[]>(`/households/${householdId}/members`);
     return res.data;

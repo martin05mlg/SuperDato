@@ -12,6 +12,10 @@ import {
   History,
   AlertCircle,
   BarChart3,
+  ExternalLink,
+  Sparkles,
+  Check,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -33,6 +37,7 @@ export const ProductsPage: React.FC = () => {
   const [isNewAliasModalOpen, setIsNewAliasModalOpen] = useState(false);
   const [newAliasText, setNewAliasText] = useState('');
   const [aliasError, setAliasError] = useState<string | null>(null);
+  const [isSuggestionsModalOpen, setIsSuggestionsModalOpen] = useState(false);
 
   // Queries
   const { data: categories = [] } = useQuery({
@@ -58,6 +63,30 @@ export const ProductsPage: React.FC = () => {
     enabled: !!selectedProductForHistory,
   });
 
+  const { data: suggestions = [], isLoading: isLoadingSuggestions } = useQuery({
+    queryKey: ['mercadonaSuggestions'],
+    queryFn: () => catalogApi.getMercadonaSuggestions(25),
+    enabled: isSuggestionsModalOpen,
+  });
+
+  // Match mutations
+  const confirmMatchMutation = useMutation({
+    mutationFn: ({ productId, onlineId }: { productId: string; onlineId: string }) =>
+      catalogApi.confirmMercadonaMatch(productId, onlineId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['mercadonaSuggestions'] });
+    },
+  });
+
+  const rejectMatchMutation = useMutation({
+    mutationFn: (productId: string) => catalogApi.rejectMercadonaMatch(productId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['mercadonaSuggestions'] });
+    },
+  });
+
   // Alias Mutation
   const addAliasMutation = useMutation({
     mutationFn: ({ productId, alias }: { productId: string; alias: string }) =>
@@ -75,6 +104,7 @@ export const ProductsPage: React.FC = () => {
   });
 
   const totalObservations = products.reduce((acc, p) => acc + (p.observations_count || 0), 0);
+  const enrichedCount = products.filter((p) => p.image_url || p.mercadona_online_id).length;
 
   return (
     <div className="space-y-6">
@@ -89,7 +119,7 @@ export const ProductsPage: React.FC = () => {
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <Package className="w-6 h-6" />
@@ -118,6 +148,27 @@ export const ProductsPage: React.FC = () => {
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Categorías Activas</p>
             <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{categories.length}</h3>
           </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Enriquecidos Online</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
+                {enrichedCount}{' '}
+                <span className="text-xs font-normal text-slate-400">/ {products.length}</span>
+              </h3>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsSuggestionsModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-semibold border border-amber-200 transition"
+          >
+            Sugerencias
+          </button>
         </div>
       </div>
 
@@ -203,19 +254,61 @@ export const ProductsPage: React.FC = () => {
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/70 transition">
                       <td className="px-6 py-4">
-                        <div className="font-semibold text-slate-900">{p.canonical_name}</div>
-                        {p.aliases && p.aliases.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {p.aliases.map((a, idx) => (
-                              <span
-                                key={idx}
-                                className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono"
-                              >
-                                {a}
-                              </span>
-                            ))}
+                        <div className="flex items-center gap-3">
+                          {p.image_url ? (
+                            <img
+                              src={p.image_url}
+                              alt={p.canonical_name}
+                              className="w-10 h-10 object-contain rounded-xl border border-slate-200 bg-white p-0.5 flex-shrink-0"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                              <Package className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                              <span>{p.enriched_name || p.canonical_name}</span>
+                              {p.brand && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
+                                  {p.brand}
+                                </span>
+                              )}
+                              {p.mercadona_url && (
+                                <a
+                                  href={p.mercadona_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-400 hover:text-emerald-600 transition flex-shrink-0"
+                                  title="Ver en Mercadona Online"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </div>
+                            {p.enriched_name && p.enriched_name !== p.canonical_name && (
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                Ticket: {p.canonical_name}
+                              </div>
+                            )}
+                            {p.packaging && (
+                              <div className="text-xs text-slate-500">{p.packaging}</div>
+                            )}
+                            {p.aliases && p.aliases.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {p.aliases.map((a, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono"
+                                  >
+                                    {a}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -559,6 +652,136 @@ export const ProductsPage: React.FC = () => {
                 className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition disabled:opacity-50"
               >
                 {addAliasMutation.isPending ? 'Guardando...' : 'Guardar Alias'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggestions Modal */}
+      {isSuggestionsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Sugerencias de Vinculación Mercadona</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Coincidencias encontradas entre los nombres del ticket y el catálogo oficial.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSuggestionsModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {isLoadingSuggestions ? (
+                <div className="py-12 text-center text-sm text-slate-400">
+                  Calculando sugerencias de fuzzy matching...
+                </div>
+              ) : suggestions.length === 0 ? (
+                <div className="py-12 text-center space-y-2">
+                  <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+                  <h4 className="text-base font-semibold text-slate-800">¡Todo al día!</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    No hay sugerencias pendientes de vinculación manual. Los productos coincidentes ya han sido enlazados o descartados.
+                  </p>
+                </div>
+              ) : (
+                suggestions.map(({ product, candidates }) => (
+                  <div
+                    key={product.id}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900 text-sm">{product.canonical_name}</span>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                          {product.category_name}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => rejectMatchMutation.mutate(product.id)}
+                        className="text-xs text-slate-400 hover:text-rose-600 transition"
+                      >
+                        Descartar
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 pt-1">
+                      {candidates.map(({ mercadona_product, score }) => (
+                        <div
+                          key={mercadona_product.id}
+                          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-amber-50/50 border border-slate-100 transition"
+                        >
+                          <div className="flex items-center gap-3">
+                            {mercadona_product.thumbnail_url ? (
+                              <img
+                                src={mercadona_product.thumbnail_url}
+                                alt={mercadona_product.display_name}
+                                className="w-11 h-11 object-contain rounded-lg border border-slate-200 bg-white p-0.5 flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-lg bg-slate-200 flex items-center justify-center text-slate-400">
+                                <Package className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium text-slate-800 text-xs flex items-center gap-1.5">
+                                <span>{mercadona_product.display_name}</span>
+                                {mercadona_product.brand && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700">
+                                    {mercadona_product.brand}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
+                                {mercadona_product.packaging && <span>{mercadona_product.packaging}</span>}
+                                {mercadona_product.unit_price && (
+                                  <span>{mercadona_product.unit_price.toFixed(2)} €</span>
+                                )}
+                                <span className="font-semibold text-amber-700">
+                                  Coincidencia: {Math.round(score * 100)}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            disabled={confirmMatchMutation.isPending}
+                            onClick={() =>
+                              confirmMatchMutation.mutate({
+                                productId: product.id,
+                                onlineId: mercadona_product.id,
+                              })
+                            }
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Vincular</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setIsSuggestionsModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 transition"
+              >
+                Cerrar
               </button>
             </div>
           </div>

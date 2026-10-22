@@ -176,3 +176,138 @@ async def test_catalog_api_endpoints(client: AsyncClient):
     assert history_res.status_code == 200
     assert history_res.json()["product_name"] == "Aceite de Oliva Virgen Extra 1L"
 
+
+@pytest.mark.asyncio
+async def test_mercadona_storefront_client_warehouse_and_brands():
+    """Tests warehouse resolution from postal codes and private label detection."""
+    from app.domains.catalog.mercadona_client import MercadonaStorefrontClient
+
+    # Warehouse resolution
+    assert MercadonaStorefrontClient.resolve_warehouse_code("50007") == "zar1"
+    assert MercadonaStorefrontClient.resolve_warehouse_code("28001") == "mad1"
+    assert MercadonaStorefrontClient.resolve_warehouse_code("08015") == "bcn1"
+    assert MercadonaStorefrontClient.resolve_warehouse_code(None) == "zar1"
+    assert MercadonaStorefrontClient.resolve_warehouse_code("") == "zar1"
+
+    # Brand detection
+    assert MercadonaStorefrontClient.extract_brand("Leche semidesnatada Hacendado botella 1 L") == "Hacendado"
+    assert MercadonaStorefrontClient.extract_brand("Crema hidratante Deliplus tarro") == "Deliplus"
+    assert MercadonaStorefrontClient.extract_brand("Lavavajillas concentrado Bosque Verde") == "Bosque Verde"
+    assert MercadonaStorefrontClient.extract_brand("Comida húmeda gatos Compy") == "Compy"
+    assert MercadonaStorefrontClient.extract_brand("Coca-Cola Original 330 ml") is None
+
+
+@pytest.mark.asyncio
+async def test_mercadona_matcher_service(db_session: AsyncSession):
+    """Tests string normalization, abbreviation expansion, fuzzy scoring, and candidate search."""
+    from app.domains.catalog.matcher import MercadonaMatcherService, normalize_string, token_similarity
+    from app.domains.catalog.models import MercadonaOnlineProduct
+
+    # Normalization & abbreviations
+    assert "desodorante" in normalize_string("DEO ROLL-ON")
+    assert "semidesnatada" in normalize_string("LECHE SEMIDESN")
+
+    # Similarity scoring
+    sim = token_similarity("LECHE SEMIDESN HACENDADO", "Leche semidesnatada Hacendado brik 1 L")
+    assert sim >= 0.85
+
+    # Seed an online product
+    online_p = MercadonaOnlineProduct(
+        id="998877",
+        display_name="Leche semidesnatada Hacendado brik 1 L",
+        slug="leche-semidesnatada-hacendado-brik-1-l",
+        brand="Hacendado",
+        packaging="Brik 1 L",
+        thumbnail_url="https://prod-mercadona.imgix.net/images/sample.jpg",
+        share_url="https://tienda.mercadona.es/product/998877",
+        unit_price=0.95,
+        warehouse_code="zar1",
+    )
+    db_session.add(online_p)
+
+    # Seed a local product
+    cat = await CatalogService.ensure_system_categories(db_session)
+    local_p = Product(
+        id=uuid.uuid4(),
+        canonical_name="Leche Semidesnatada Hacendado",
+        category_id=cat["lacteos-y-huevos"].id,
+        default_unit="ud",
+    )
+    db_session.add(local_p)
+    await db_session.commit()
+
+    # Find matches
+    matches = await MercadonaMatcherService.find_matches_for_product(db_session, local_p, reference_price=0.95)
+    assert len(matches) >= 1
+    best, score = matches[0]
+    assert best.id == "998877"
+    assert score >= 0.85
+
+    # Run household auto-enrichment
+    summary = await MercadonaMatcherService.enrich_all_household_products(db_session, auto_threshold=0.85)
+    assert summary["auto_enriched_count"] >= 1
+
+    # Verify local_p is enriched
+    await db_session.refresh(local_p)
+    assert local_p.mercadona_online_id == "998877"
+    assert local_p.image_url == "https://prod-mercadona.imgix.net/images/sample.jpg"
+    assert local_p.enrichment_status == "AUTO"
+
+
+@pytest.mark.asyncio
+async def test_mercadona_api_manual_binding_and_search(client: AsyncClient, db_session: AsyncSession):
+    """Tests search, suggestions, confirm match, and reject match endpoints."""
+    from app.domains.catalog.models import MercadonaOnlineProduct
+
+    # 1. Seed online product in DB
+    online_item = MercadonaOnlineProduct(
+        id="112233",
+        display_name="Galletas María Hacendado paquete 800 g",
+        slug="galletas-maria-hacendado",
+        brand="Hacendado",
+        packaging="Paquete 800 g",
+        thumbnail_url="https://prod-mercadona.imgix.net/images/galletas.jpg",
+        share_url="https://tienda.mercadona.es/product/112233",
+        unit_price=1.60,
+        warehouse_code="zar1",
+    )
+    db_session.add(online_item)
+
+    # Seed local product
+    cat = await CatalogService.ensure_system_categories(db_session)
+    local_item = Product(
+        id=uuid.uuid4(),
+        canonical_name="Galleta Maria",
+        category_id=cat["despensa-y-conservas"].id,
+        default_unit="ud",
+    )
+    db_session.add(local_item)
+    await db_session.commit()
+
+    # 2. GET /api/v1/catalog/mercadona/search?query=maria
+    search_res = await client.get("/api/v1/catalog/mercadona/search?query=maria")
+    assert search_res.status_code == 200
+    search_results = search_res.json()
+    assert any(p["id"] == "112233" for p in search_results)
+
+    # 3. POST /api/v1/catalog/mercadona/confirm-match
+    confirm_res = await client.post("/api/v1/catalog/mercadona/confirm-match", json={
+        "product_id": str(local_item.id),
+        "mercadona_online_id": "112233",
+    })
+    assert confirm_res.status_code == 200
+    confirmed_data = confirm_res.json()
+    assert confirmed_data["enrichment_status"] == "MANUALLY_CONFIRMED"
+    assert confirmed_data["image_url"] == "https://prod-mercadona.imgix.net/images/galletas.jpg"
+    assert confirmed_data["brand"] == "Hacendado"
+
+    # 4. POST /api/v1/catalog/mercadona/reject-match
+    reject_res = await client.post("/api/v1/catalog/mercadona/reject-match", json={
+        "product_id": str(local_item.id),
+    })
+    assert reject_res.status_code == 200
+    rejected_data = reject_res.json()
+    assert rejected_data["enrichment_status"] == "REJECTED"
+    assert rejected_data["image_url"] is None
+
+

@@ -92,10 +92,13 @@ Este documento desglosa todas las tareas técnicas del proyecto SuperDato por do
 
 ---
 
-### Dominio 8: Integración Opcional con Mercadona Online (Enriquecimiento y Fotos) — Backlog de Mejora
+### Dominio 8: Integración Opcional con Mercadona Online (Enriquecimiento y Fotos) — Fase E (Completada)
 - [x] **TSK-801 (P1)**: Investigar la API de `tienda.mercadona.es` y redactar el documento de diseño de arquitectura y especificación técnica ([`docs/07_DISENO_INTEGRACION_MERCADONA_CATALOG_ONLINE.md`](docs/07_DISENO_INTEGRACION_MERCADONA_CATALOG_ONLINE.md)).
-- [ ] **TSK-802 (P2)**: Extender el modelo de base de datos con la tabla `mercadona_online_products`, campos de enriquecimiento en `products` (`enriched_name`, `image_url`, `brand`, `enrichment_status`) y campo `settings` en `households`.
-- [ ] **TSK-803 (P2)**: Implementar el cliente asíncrono `MercadonaStorefrontClient` para descargar y almacenar el snapshot del catálogo online en la base de datos local por código postal / almacén logístico (`wh`).
-- [ ] **TSK-804 (P2)**: Diseñar el motor de emparejamiento difuso (*Fuzzy Matching*) con diccionario de abreviaturas frecuentes de TPV, similitud por tokens (*Token Set Ratio*) y validación por rango de precio unitario ($\pm 25\%$).
-- [ ] **TSK-805 (P2)**: Implementar interfaz de usuario: interruptor de activación y selector de código postal en `SettingsPage.tsx`, miniaturas de producto en `ProductsPage.tsx` y `ReceiptDetailModal.tsx`, y modal de resolución de sugerencias dudosas.
-- [ ] **TSK-806 (P2)**: Configurar tarea programada en Celery Beat para refresco mensual del snapshot y escribir batería de tests unitarios de coincidencia léxica.
+- [x] **TSK-802 (P1)**: Extender el modelo de base de datos con la tabla `mercadona_online_products`, campos de enriquecimiento en `products` (`mercadona_online_id`, `enriched_name`, `image_url`, `brand`, `packaging`, `mercadona_url`, `enrichment_status`, `enrichment_confidence`) y campo `settings` en `households`. Migración aplicada con script idempotente.
+- [x] **TSK-803 (P1)**: Implementar el cliente asíncrono `MercadonaStorefrontClient` en `backend/app/domains/catalog/mercadona_client.py` para resolver códigos postales a bloques logísticos (`wh`, ej. 50007 -> zar1) y descargar categorías y productos mediante endpoints públicos, controlando duplicados por subcategoría y rate limits.
+- [x] **TSK-804 (P1)**: Diseñar e implementar el motor de emparejamiento difuso `MercadonaMatcherService` en `backend/app/domains/catalog/matcher.py` con diccionario de abreviaturas de TPV de Mercadona, filtrado de stopwords, similitud por tokens (*Token Set Ratio*) y penalización/bonificación por tolerancia de precio unitario ($\pm 25\%$).
+- [x] **TSK-805 (P1)**: Implementar interfaz de usuario:
+  - Tarjeta de integración en `SettingsPage.tsx` con toggle para activar/desactivar, selector de código postal, resolución visual de almacén logístico, botón de sincronización de catálogo y botón de auto-vinculación.
+  - Miniaturas oficiales de producto (36-40px), badges de marca (Hacendado, Bosque Verde, Deliplus, Compy), enlace directo a la web oficial y modal de confirmación/descarte de sugerencias en `ProductsPage.tsx`.
+  - Miniaturas oficiales y datos enriquecidos en cada línea del modal de desglose de ticket `ReceiptDetailModal.tsx`.
+- [x] **TSK-806 (P1)**: Escribir suite completa de pruebas unitarias e integración en `tests/domains/test_catalog.py` (23 tests pasando al 100%) cubriendo resolución de almacenes, marcas, coincidencia léxica difusa y endpoints de búsqueda, confirmación y descarte.

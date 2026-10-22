@@ -67,7 +67,76 @@ class ProductResponse(ProductBase):
     max_price: Optional[float] = None
     aliases: List[str] = []
     created_at: str
+    # Mercadona Online enrichment attributes
+    mercadona_online_id: Optional[str] = None
+    enriched_name: Optional[str] = None
+    image_url: Optional[str] = None
+    brand: Optional[str] = None
+    packaging: Optional[str] = None
+    mercadona_url: Optional[str] = None
+    enrichment_status: Optional[str] = None
+    enrichment_confidence: Optional[float] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Mercadona Online Schemas ---
+
+class MercadonaOnlineProductResponse(BaseModel):
+    id: str
+    display_name: str
+    slug: Optional[str] = None
+    brand: Optional[str] = None
+    packaging: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    share_url: Optional[str] = None
+    unit_price: Optional[float] = None
+    reference_price: Optional[float] = None
+    reference_format: Optional[str] = None
+    category_path: Optional[str] = None
+    warehouse_code: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MercadonaSyncRequest(BaseModel):
+    postal_code: Optional[str] = None
+    limit_subcategories: Optional[int] = None
+
+
+class MercadonaSyncResponse(BaseModel):
+    warehouse_code: str
+    subcategories_processed: int
+    products_upserted: int
+    synced_at: str
+
+
+class MercadonaEnrichRequest(BaseModel):
+    auto_threshold: float = 0.85
+
+
+class MercadonaEnrichResponse(BaseModel):
+    total_products_checked: int
+    auto_enriched_count: int
+    pending_suggestions_count: int
+    threshold_used: float
+
+
+class MercadonaCandidateItem(BaseModel):
+    mercadona_product: MercadonaOnlineProductResponse
+    score: float
+
+
+class MercadonaSuggestionItem(BaseModel):
+    product: ProductResponse
+    candidates: List[MercadonaCandidateItem]
+
+
+class MercadonaConfirmMatchRequest(BaseModel):
+    product_id: str
+    mercadona_online_id: str
+
+
+class MercadonaRejectMatchRequest(BaseModel):
+    product_id: str
 
 
 # --- Price Observation Schemas ---

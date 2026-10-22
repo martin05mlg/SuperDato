@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHousehold } from '../../context/HouseholdContext';
 import { householdsApi } from '../../api/households.api';
+import { catalogApi } from '../../api/catalog.api';
 import {
   Settings,
   Users,
@@ -11,6 +12,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Trash2,
+  Sparkles,
+  RefreshCw,
+  ShoppingCart,
+  Check,
+  Save,
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
@@ -26,6 +32,93 @@ export const SettingsPage: React.FC = () => {
   const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
   const [generatedInviteToken, setGeneratedInviteToken] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Mercadona Online Integration State
+  const [mercadonaEnabled, setMercadonaEnabled] = useState(false);
+  const [mercadonaPostalCode, setMercadonaPostalCode] = useState('50007');
+  const [isSavingMercadona, setIsSavingMercadona] = useState(false);
+  const [mercadonaSaveSuccess, setMercadonaSaveSuccess] = useState(false);
+  const [isSyncingCatalog, setIsSyncingCatalog] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [enrichResult, setEnrichResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeHousehold?.settings) {
+      setMercadonaEnabled(!!activeHousehold.settings.mercadona_online_enabled);
+      setMercadonaPostalCode(activeHousehold.settings.mercadona_postal_code || '50007');
+    }
+  }, [activeHousehold]);
+
+  // Warehouse resolution helper
+  const getWarehouseName = (cp: string) => {
+    const prefix = cp.trim().slice(0, 2);
+    const map: Record<string, string> = {
+      '50': 'zar1 (Zaragoza)',
+      '28': 'mad1 (Madrid)',
+      '08': 'bcn1 (Barcelona)',
+      '46': 'vlc1 (Valencia)',
+      '41': 'sev1 (Sevilla)',
+      '03': 'alc1 (Alicante)',
+      '29': 'agp1 (Málaga)',
+      '30': 'mur1 (Murcia)',
+      '48': 'bio1 (Bilbao)',
+    };
+    return map[prefix] || 'zar1 (Almacén predeterminado)';
+  };
+
+  const handleSaveMercadonaSettings = async () => {
+    if (!activeHousehold) return;
+    try {
+      setIsSavingMercadona(true);
+      setMercadonaSaveSuccess(false);
+      await householdsApi.update(activeHousehold.id, {
+        settings: {
+          mercadona_online_enabled: mercadonaEnabled,
+          mercadona_postal_code: mercadonaPostalCode.trim(),
+        },
+      });
+      await refreshHouseholds();
+      setMercadonaSaveSuccess(true);
+      setTimeout(() => setMercadonaSaveSuccess(false), 3000);
+    } catch {
+      alert('Error al guardar la configuración de Mercadona Online.');
+    } finally {
+      setIsSavingMercadona(false);
+    }
+  };
+
+  const handleSyncMercadonaCatalog = async () => {
+    try {
+      setIsSyncingCatalog(true);
+      setSyncResult(null);
+      const res = await catalogApi.syncMercadonaCatalog(mercadonaPostalCode, 20);
+      setSyncResult(
+        `Catálogo actualizado con éxito (${res.warehouse_code}): ${res.products_upserted} artículos procesados en ${res.subcategories_processed} categorías.`
+      );
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    } catch {
+      setSyncResult('Error al sincronizar con el catálogo público de Mercadona.');
+    } finally {
+      setIsSyncingCatalog(false);
+    }
+  };
+
+  const handleEnrichProducts = async () => {
+    try {
+      setIsEnriching(true);
+      setEnrichResult(null);
+      const res = await catalogApi.enrichMercadonaProducts(0.82);
+      setEnrichResult(
+        `Auto-vinculación completada: ${res.auto_enriched_count} productos vinculados con éxito (${res.pending_suggestions_count} sugerencias adicionales para revisión manual).`
+      );
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    } catch {
+      setEnrichResult('Error al ejecutar la vinculación de productos.');
+    } finally {
+      setIsEnriching(false);
+    }
+  };
 
   // Fetch members of active household
   const { data: members = [] } = useQuery({
@@ -122,6 +215,135 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mercadona Online Integration Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-start space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <ShoppingCart className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>Catálogo Online Mercadona</span>
+                <span className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                  Fase E · Oficial
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                Enriquece automáticamente los nombres del ticket con fotos oficiales de la tienda online de Mercadona,
+                marcas comerciales (Hacendado, Bosque Verde, Deliplus, Compy) y envases detallados.
+              </p>
+            </div>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+            <input
+              type="checkbox"
+              checked={mercadonaEnabled}
+              onChange={(e) => setMercadonaEnabled(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            <span className="ml-3 text-xs font-semibold text-slate-700">
+              {mercadonaEnabled ? 'Activado' : 'Desactivado'}
+            </span>
+          </label>
+        </div>
+
+        {mercadonaEnabled ? (
+          <div className="space-y-4 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Código Postal para Almacén Online
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    maxLength={5}
+                    value={mercadonaPostalCode}
+                    onChange={(e) => setMercadonaPostalCode(e.target.value)}
+                    placeholder="50007"
+                    className="w-32 px-3 py-2 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="text-xs text-slate-500 font-medium">
+                    → Almacén resuelto: <strong className="text-emerald-700">{getWarehouseName(mercadonaPostalCode)}</strong>
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Permite descargar el surtido y precios exactos del bloque logístico de tu zona.
+                </p>
+              </div>
+
+              <div className="flex items-end justify-start sm:justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={isSavingMercadona}
+                  onClick={handleSaveMercadonaSettings}
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                >
+                  {mercadonaSaveSuccess ? <Check className="w-4 h-4 text-emerald-400" /> : <Save className="w-4 h-4" />}
+                  <span>{mercadonaSaveSuccess ? '¡Guardado!' : 'Guardar Ajustes'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Sync & Enrichment Action Buttons */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Operaciones del Catálogo Local
+              </h3>
+              <p className="text-xs text-slate-500">
+                Los datos se sincronizan con una tabla local de tu dispositivo. La navegación normal nunca realiza peticiones
+                externas en tiempo real, garantizando máxima velocidad y total privacidad.
+              </p>
+
+              <div className="flex flex-wrap gap-2.5 pt-1">
+                <button
+                  type="button"
+                  disabled={isSyncingCatalog}
+                  onClick={handleSyncMercadonaCatalog}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCatalog ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingCatalog ? 'Descargando surtido...' : '1. Sincronizar Catálogo Online'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isEnriching}
+                  onClick={handleEnrichProducts}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${isEnriching ? 'animate-spin' : ''}`} />
+                  <span>{isEnriching ? 'Vinculando productos...' : '2. Auto-vincular Productos (Fuzzy Match)'}</span>
+                </button>
+              </div>
+
+              {syncResult && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center space-x-2 text-emerald-800 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>{syncResult}</span>
+                </div>
+              )}
+
+              {enrichResult && (
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 flex items-center space-x-2 text-purple-900 text-xs">
+                  <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                  <span>{enrichResult}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-4 text-center">
+            <p className="text-xs text-slate-500">
+              La integración está actualmente desactivada para este hogar. Actívala arriba para mostrar fotos oficiales de productos y marcas comerciales.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Members & RBAC Card */}

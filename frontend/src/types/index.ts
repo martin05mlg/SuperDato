@@ -13,11 +13,18 @@ export interface User {
   created_at: string;
 }
 
+export interface HouseholdSettings {
+  mercadona_online_enabled?: boolean;
+  mercadona_postal_code?: string;
+  [key: string]: any;
+}
+
 export interface Household {
   id: string;
   name: string;
   currency: string;
   role: Role;
+  settings?: HouseholdSettings;
   created_at: string;
 }
 
@@ -55,6 +62,10 @@ export interface ReceiptLine {
   weight_in_kg?: number | null;
   validation_status: string;
   is_manual_override: boolean;
+  image_url?: string | null;
+  brand?: string | null;
+  enriched_name?: string | null;
+  packaging?: string | null;
 }
 
 export interface ReceiptLineUpdate {
@@ -130,6 +141,52 @@ export interface Product {
   max_price?: number | null;
   aliases?: string[];
   created_at: string;
+  // Mercadona Online integration
+  mercadona_online_id?: string | null;
+  enriched_name?: string | null;
+  image_url?: string | null;
+  brand?: string | null;
+  packaging?: string | null;
+  mercadona_url?: string | null;
+  enrichment_status?: 'AUTO' | 'MANUALLY_CONFIRMED' | 'PENDING_SUGGESTION' | 'REJECTED' | 'UNMATCHED' | null;
+  enrichment_confidence?: number | null;
+}
+
+export interface MercadonaOnlineProduct {
+  id: string;
+  display_name: string;
+  slug?: string | null;
+  brand?: string | null;
+  packaging?: string | null;
+  thumbnail_url?: string | null;
+  share_url?: string | null;
+  unit_price?: number | null;
+  reference_price?: number | null;
+  reference_format?: string | null;
+  category_path?: string | null;
+  warehouse_code?: string | null;
+}
+
+export interface MercadonaSyncResponse {
+  warehouse_code: string;
+  subcategories_processed: number;
+  products_upserted: number;
+  synced_at: string;
+}
+
+export interface MercadonaEnrichResponse {
+  total_products_checked: number;
+  auto_enriched_count: number;
+  pending_suggestions_count: number;
+  threshold_used: number;
+}
+
+export interface MercadonaSuggestionItem {
+  product: Product;
+  candidates: Array<{
+    mercadona_product: MercadonaOnlineProduct;
+    score: number;
+  }>;
 }
 
 export interface PriceObservation {

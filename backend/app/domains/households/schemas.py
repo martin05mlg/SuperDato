@@ -1,17 +1,19 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class HouseholdCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     currency: str = Field("EUR", min_length=3, max_length=3)
+    settings: Optional[Dict[str, Any]] = None
 
 
 class HouseholdUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    settings: Optional[Dict[str, Any]] = None
 
 
 class HouseholdResponse(BaseModel):
@@ -21,6 +23,7 @@ class HouseholdResponse(BaseModel):
     name: str
     currency: str
     role: str
+    settings: Optional[Dict[str, Any]] = None
     created_at: datetime
 
 

@@ -39,6 +39,7 @@ class HouseholdService:
                     name=household.name,
                     currency=household.currency,
                     role=role,
+                    settings=household.settings or {},
                     created_at=household.created_at,
                 )
             )
@@ -50,6 +51,7 @@ class HouseholdService:
             name=data.name.strip(),
             currency=data.currency.upper().strip(),
             created_by_user_id=user_id,
+            settings=data.settings or {},
         )
         db.add(household)
         await db.flush()
@@ -68,6 +70,7 @@ class HouseholdService:
             name=household.name,
             currency=household.currency,
             role="OWNER",
+            settings=household.settings or {},
             created_at=household.created_at,
         )
 
@@ -86,6 +89,7 @@ class HouseholdService:
             name=household.name,
             currency=household.currency,
             role=role,
+            settings=household.settings or {},
             created_at=household.created_at,
         )
 
@@ -103,6 +107,10 @@ class HouseholdService:
             household.name = data.name.strip()
         if data.currency is not None:
             household.currency = data.currency.upper().strip()
+        if data.settings is not None:
+            current_settings = dict(household.settings or {})
+            current_settings.update(data.settings)
+            household.settings = current_settings
 
         await db.commit()
         await db.refresh(household)
@@ -112,6 +120,7 @@ class HouseholdService:
             name=household.name,
             currency=household.currency,
             role=role,
+            settings=household.settings or {},
             created_at=household.created_at,
         )
 

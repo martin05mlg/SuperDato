@@ -434,6 +434,10 @@ class ReceiptService:
                         "weight_in_kg": float(l.weight_in_kg) if l.weight_in_kg is not None else None,
                         "validation_status": l.validation_status,
                         "is_manual_override": l.is_manual_override,
+                        "image_url": l.product.image_url if l.product else None,
+                        "brand": l.product.brand if l.product else None,
+                        "enriched_name": l.product.enriched_name if l.product else None,
+                        "packaging": l.product.packaging if l.product else None,
                     })
 
                 taxes = []

@@ -10,6 +10,7 @@ import {
   Edit2,
   Check,
   AlertCircle,
+  Package,
 } from 'lucide-react';
 import { receiptsApi } from '../../api/receipts.api';
 
@@ -266,19 +267,50 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
 
                     return (
                       <tr key={line.id} className="hover:bg-slate-50/50">
-                        <td className="py-2 px-3 text-slate-400">{line.line_order}</td>
-                        <td className="py-2 px-3 font-medium text-slate-800">
-                          {line.raw_description}
-                          {line.is_weighed_item && (
-                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-700 border border-amber-200">
-                              Granel
-                            </span>
-                          )}
-                          {line.is_manual_override && (
-                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-700 border border-blue-200">
-                              Editado
-                            </span>
-                          )}
+                        <td className="py-2.5 px-3 text-slate-400">{line.line_order}</td>
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-2.5">
+                            {line.image_url ? (
+                              <img
+                                src={line.image_url}
+                                alt={line.raw_description}
+                                className="w-9 h-9 object-contain rounded-lg border border-slate-200 bg-white p-0.5 flex-shrink-0"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+                                <Package className="w-4 h-4" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="font-medium text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                <span>{line.enriched_name || line.product_name || line.raw_description}</span>
+                                {line.brand && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
+                                    {line.brand}
+                                  </span>
+                                )}
+                                {line.is_weighed_item && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-50 text-amber-700 border border-amber-200 flex-shrink-0">
+                                    Granel
+                                  </span>
+                                )}
+                                {line.is_manual_override && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                                    Editado
+                                  </span>
+                                )}
+                              </div>
+                              {line.enriched_name && line.enriched_name !== line.raw_description && (
+                                <div className="text-[10px] text-slate-400 font-mono">
+                                  Ticket: {line.raw_description}
+                                </div>
+                              )}
+                              {line.packaging && (
+                                <div className="text-[10px] text-slate-400">{line.packaging}</div>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="py-2 px-3">
                           <span className="inline-block px-2 py-0.5 rounded-md text-[11px] bg-slate-100 text-slate-700">

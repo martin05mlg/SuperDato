@@ -295,6 +295,14 @@ class CatalogService:
                 "max_price": max(prices) if prices else None,
                 "aliases": [a.raw_name_normalized for a in p.aliases],
                 "created_at": p.created_at.isoformat() if p.created_at else datetime.now(timezone.utc).isoformat(),
+                "mercadona_online_id": p.mercadona_online_id,
+                "enriched_name": p.enriched_name,
+                "image_url": p.image_url,
+                "brand": p.brand,
+                "packaging": p.packaging,
+                "mercadona_url": p.mercadona_url,
+                "enrichment_status": p.enrichment_status,
+                "enrichment_confidence": float(p.enrichment_confidence) if p.enrichment_confidence is not None else None,
             })
 
         return items

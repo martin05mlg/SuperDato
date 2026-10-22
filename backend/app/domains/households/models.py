@@ -31,6 +31,11 @@ class Household(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    settings: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+        default=dict,
+    )
 
     # Relationships
     memberships: Mapped[List["HouseholdMembership"]] = relationship(
