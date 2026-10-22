@@ -19,7 +19,7 @@ gantt
     section Fase 5: Dashboard
     Métricas Agregadas y Gráficas Interactivas :done,    p5, after p4, 2d
     section Fase 6: Estabilización y Calidad
-    Tests E2E, Auditoría y Empaquetado         :active,  p6, after p5, 1d
+    Tests E2E, Auditoría y Empaquetado         :done,    p6, after p5, 1d
 ```
 
 ---
@@ -34,7 +34,7 @@ gantt
 | **Fase 3: Gmail e Importación** | OAuth 2.0 Google, tokens cifrados AES-256, deduplicación por huella digital, tareas Celery/Beat y monitor de importaciones en la web. | **COMPLETADA** | 100% |
 | **Fase 4: Histórico y Catálogo** | Desglose de líneas y fiscalidad IVA, normalización de productos, categorías, histórico de precios inmutables y edición manual protegida. | **COMPLETADA** | 100% |
 | **Fase 5: Dashboard y Analítica** | Consultas agregadas SQL, KPIs de gasto, variación MoM, Top productos, filtros dinámicos por fecha y gráficos interactivos. | **COMPLETADA** | 100% |
-| **Fase 6: Estabilización y QA** | Batería de pruebas con `pytest`, validación con tickets reales, optimización de Docker Compose y guía de despliegue. | **SIGUIENTE** | 50% |
+| **Fase 6: Estabilización y QA** | Batería de 20 pruebas con `pytest` (<3s), validación con tickets reales de Gmail, variables de entorno y documentación de despliegue. | **COMPLETADA** | 100% |
 
 ---
 
@@ -54,6 +54,6 @@ gantt
 | **10. Coherencia en los filtros del dashboard** | Fase 5 | Filtro global por rango de fechas (Histórico, 30 días, Este mes, Mes anterior, Año actual) aplicado sincrónicamente a todos los gráficos y KPIs. | **Verificado** |
 | **11. Aislamiento total entre casas ajenas** | Fase 2 | Tests de seguridad que verifican que un usuario sin membresía recibe HTTP 403 / 404 al acceder a datos de otra casa. | **Verificado** |
 | **12. Consulta y recuperación de errores de importación** | Fase 3 | Vista de monitor de importaciones (`import_jobs`) y botón de reintento de procesamiento. | **Verificado** |
-| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 20 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **En progreso (20/20 OK)** |
-| **14. Documentación completa de instalación y uso** | Fase 6 | Documentos Markdown en `docs/` y archivo `README.md` con instrucciones de arranque con Docker. | **En progreso** |
+| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 20 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **Verificado** |
+| **14. Documentación completa de instalación y uso** | Fase 6 | Documentos Markdown en `docs/` y archivo `README.md` con instrucciones de arranque con Docker. | **Verificado** |
 

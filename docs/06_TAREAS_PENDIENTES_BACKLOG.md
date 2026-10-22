@@ -85,7 +85,7 @@ Este documento desglosa todas las tareas técnicas del proyecto SuperDato por do
 ---
 
 ### Dominio 7: Pruebas, Seguridad y Despliegue (Fase 6)
-- [x] **TSK-701 (P0)**: Crear suite completa de pruebas automáticas con `pytest` y `pytest-asyncio` (17 pruebas activas pasando en <3s).
-- [ ] **TSK-702 (P0)**: Validar casos límite: tickets con productos vendidos al peso, tickets con devoluciones/descuentos, tickets duplicados, intentos de acceso no autorizado entre casas.
-- [ ] **TSK-703 (P1)**: Documentar variables de entorno en `.env.example` y redactar `README.md` detallado para puesta en marcha con un solo comando (`docker compose up -d`).
-- [ ] **TSK-704 (P1)**: Verificar la ausencia de fugas de credenciales en logs y validar políticas de seguridad.
+- [x] **TSK-701 (P0)**: Crear suite completa de pruebas automáticas con `pytest` y `pytest-asyncio` (20 pruebas activas pasando al 100% en <3s).
+- [x] **TSK-702 (P0)**: Validar casos límite: tickets con productos vendidos al peso, tickets con devoluciones/descuentos, tickets duplicados, intentos de acceso no autorizado entre casas.
+- [x] **TSK-703 (P1)**: Documentar variables de entorno en `.env.example` y redactar `README.md` detallado para puesta en marcha con un solo comando (`docker compose up -d`).
+- [x] **TSK-704 (P1)**: Verificar la ausencia de fugas de credenciales en logs y validar políticas de seguridad (Argon2id, tokens cifrados AES-256, Fernet).
