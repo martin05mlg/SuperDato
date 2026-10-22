@@ -311,3 +311,4 @@ Esta especificación garantiza que la integración:
 
 > [!NOTE]
 > Este documento queda registrado como especificación de diseño para la fase de mejora continua de SuperDato.
+

@@ -254,6 +254,7 @@ class ReceiptService:
             deduplication_hash=dedup_hash,
             status="PROCESSED",
             extraction_warnings=extracted.get("extraction_warnings", []),
+            raw_text=extracted.get("raw_text"),
             is_manual_override=False,
         )
         db.add(receipt)

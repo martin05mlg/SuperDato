@@ -91,7 +91,8 @@ class PDFReceiptExtractor:
         while i < len(lines_text):
             line = lines_text[i].strip()
 
-            if "Cnt. Descripción P. Unit Importe" in line or "Cnt. Descripci" in line:
+            # Soporta tanto "Cnt. Descripción P. Unit Importe" (reciente) como "Descripción P. Unit Importe" (anterior)
+            if "Descripci" in line and ("Importe" in line or "P. Unit" in line or "Cnt" in line):
                 in_items = True
                 i += 1
                 continue
@@ -101,7 +102,31 @@ class PDFReceiptExtractor:
                 break
 
             if in_items and line:
-                # Caso A: Artículo al peso (siguiente línea contiene peso en kg y precio/kg)
+                # Caso A: Descuento o Promoción (ej. PROMO 2x1 -1,50)
+                desc_match = re.search(r"^([A-Z0-9\s\.\-]+?)\s+-([\d,]+)\s*€?$", line)
+                if desc_match and ("PROMO" in line or "DTO" in line or "DESCUENTO" in line):
+                    d_name = desc_match.group(1).strip()
+                    d_val = Decimal(desc_match.group(2).replace(",", "."))
+                    items.append({
+                        "line_order": line_order,
+                        "raw_description": d_name,
+                        "product_name": d_name,
+                        "category_name": "Descuentos",
+                        "quantity": 1.0,
+                        "unit_of_measure": "ud",
+                        "unit_price": float(-d_val),
+                        "discount_amount": float(d_val),
+                        "line_total": float(-d_val),
+                        "is_weighed_item": False,
+                        "weight_in_kg": None,
+                        "validation_status": "VALID",
+                        "is_manual_override": False,
+                    })
+                    line_order += 1
+                    i += 1
+                    continue
+
+                # Caso B: Artículo al peso (siguiente línea contiene peso en kg y precio/kg)
                 if i + 1 < len(lines_text) and "kg" in lines_text[i + 1]:
                     weight_line = lines_text[i + 1].strip()
                     w_match = re.search(r"([\d,]+)\s*kg\s+([\d,]+)\s*[€\?]/kg\s+([\d,]+)", weight_line)
@@ -131,7 +156,7 @@ class PDFReceiptExtractor:
                     i += 2
                     continue
 
-                # Caso B: Parking u otros servicios
+                # Caso C: Parking u otros servicios
                 if "PARKING" in line:
                     items.append({
                         "line_order": line_order,
@@ -154,7 +179,7 @@ class PDFReceiptExtractor:
                         i += 1
                     continue
 
-                # Caso C: Múltiples unidades estándar (Ej: 2 DEO ROLL-ON ALOE 0,90 1,80)
+                # Caso D: Múltiples unidades estándar (Ej: 2 DEO ROLL-ON ALOE 0,90 1,80)
                 multi_match = re.search(r"^(\d+)\s+(.+?)\s+([\d,]+)\s+([\d,]+)$", line)
                 if multi_match:
                     qty = int(multi_match.group(1))
@@ -180,7 +205,7 @@ class PDFReceiptExtractor:
                     i += 1
                     continue
 
-                # Caso D: Unidad individual estándar (Ej: 1 PIPA GIGANTE AGUASAL 1,10)
+                # Caso E: Unidad individual estándar (Ej: 1 PIPA GIGANTE AGUASAL 1,10)
                 single_match = re.search(r"^1\s+(.+?)\s+([\d,]+)$", line)
                 if single_match:
                     name = single_match.group(1).strip()
@@ -206,16 +231,29 @@ class PDFReceiptExtractor:
 
             i += 1
 
-        # 3. Desglose de IVA
+        # 3. Desglose de IVA (soporta formato de 4 columnas reciente y 3 columnas anterior)
         tax_lines = []
-        tax_matches = re.findall(r"(\d+)%\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)", text)
-        for pct, base, quota, tot in tax_matches:
-            tax_lines.append({
-                "tax_rate_percent": float(pct),
-                "taxable_base": float(base.replace(",", ".")),
-                "tax_amount": float(quota.replace(",", ".")),
-                "total_with_tax": float(tot.replace(",", ".")),
-            })
+        tax_matches_4 = re.findall(r"(\d+)%\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)", text)
+        tax_matches_3 = re.findall(r"(\d+)%\s+([\d,]+)\s+([\d,]+)", text)
+
+        if tax_matches_4 and len(tax_matches_4) == len(tax_matches_3):
+            for pct, base, quota, tot in tax_matches_4:
+                tax_lines.append({
+                    "tax_rate_percent": float(pct),
+                    "taxable_base": float(base.replace(",", ".")),
+                    "tax_amount": float(quota.replace(",", ".")),
+                    "total_with_tax": float(tot.replace(",", ".")),
+                })
+        else:
+            for pct, base, quota in tax_matches_3:
+                b = Decimal(base.replace(",", "."))
+                q = Decimal(quota.replace(",", "."))
+                tax_lines.append({
+                    "tax_rate_percent": float(pct),
+                    "taxable_base": float(b),
+                    "tax_amount": float(q),
+                    "total_with_tax": float(b + q),
+                })
 
         # Conciliación matemática
         calculated_sum = sum(Decimal(str(item["line_total"])) for item in items)
@@ -251,6 +289,7 @@ class PDFReceiptExtractor:
             "deduplication_hash": deduplication_hash,
             "lines": items,
             "tax_lines": tax_lines,
+            "raw_text": text,
         }
 
     @staticmethod
