@@ -143,3 +143,8 @@ class HouseholdInvitation(Base):
     # Relationships
     household: Mapped["Household"] = relationship("Household", back_populates="invitations")
 
+
+# Register auth models in DeclarativeBase registry
+import app.domains.auth.models  # noqa: F401
+
+

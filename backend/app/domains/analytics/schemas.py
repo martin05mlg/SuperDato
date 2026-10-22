@@ -38,3 +38,4 @@ class TopProductResponse(BaseModel):
     total_quantity: float
     purchases_count: int
     average_price: float
+

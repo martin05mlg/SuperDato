@@ -14,6 +14,9 @@ import {
   Award,
   ChevronRight,
   Package,
+  CalendarRange,
+  X,
+  Filter,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -27,11 +30,14 @@ import {
   Cell,
 } from 'recharts';
 
-type DatePreset = 'ALL' | '30D' | 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_YEAR';
+type DatePreset = 'ALL' | '30D' | 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_YEAR' | 'CUSTOM';
 
 export const DashboardPage: React.FC = () => {
   const { activeHousehold } = useHousehold();
   const [preset, setPreset] = useState<DatePreset>('ALL');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [showCustomPicker, setShowCustomPicker] = useState<boolean>(false);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
 
   // Calculate start and end dates based on selected preset
@@ -58,11 +64,17 @@ export const DashboardPage: React.FC = () => {
         const start = new Date(today.getFullYear(), 0, 1);
         return { start_date: formatDate(start), end_date: formatDate(today) };
       }
+      case 'CUSTOM': {
+        return {
+          start_date: customStartDate || undefined,
+          end_date: customEndDate || undefined,
+        };
+      }
       case 'ALL':
       default:
         return { start_date: undefined, end_date: undefined };
     }
-  }, [preset]);
+  }, [preset, customStartDate, customEndDate]);
 
   const queryParams = useMemo(() => ({
     household_id: activeHousehold?.id,
@@ -107,73 +119,167 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  const handleSelectPreset = (p: DatePreset) => {
+    setPreset(p);
+    if (p !== 'CUSTOM') {
+      setShowCustomPicker(false);
+    }
+  };
+
+  const handleEnableCustomPicker = () => {
+    setPreset('CUSTOM');
+    setShowCustomPicker(true);
+    if (!customStartDate || !customEndDate) {
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      setCustomStartDate(thirtyDaysAgo.toISOString().split('T')[0]);
+      setCustomEndDate(today.toISOString().split('T')[0]);
+    }
+  };
+
+  const formatLastPurchase = (raw?: string | null) => {
+    if (!raw) return { date: 'Sin compras', time: null };
+    if (raw.includes(' ')) {
+      const [d, t] = raw.split(' ');
+      return { date: d, time: t };
+    }
+    return { date: raw, time: null };
+  };
+
+  const lastPurchase = formatLastPurchase(summary?.last_purchase_date);
+
   return (
     <div className="space-y-6">
-      {/* Page Header with Date Filter Pills */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard de Gastos</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Resumen contable y analítica de compras de{' '}
-            <span className="font-semibold text-slate-800">
-              {activeHousehold?.name || 'tu hogar'}
-            </span>
-          </p>
+      {/* Page Header with Date Filter Controls */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard de Gastos</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Resumen contable y analítica de compras de{' '}
+              <span className="font-semibold text-slate-800">
+                {activeHousehold?.name || 'tu hogar'}
+              </span>
+            </p>
+          </div>
+
+          {/* Quick Preset Pills */}
+          <div className="flex items-center flex-wrap bg-slate-100 p-1 rounded-2xl text-xs font-semibold text-slate-600 gap-1 border border-slate-200">
+            <button
+              onClick={() => handleSelectPreset('ALL')}
+              className={`px-3 py-1.5 rounded-xl transition ${
+                preset === 'ALL'
+                  ? 'bg-white text-emerald-800 shadow-sm font-bold'
+                  : 'hover:text-slate-900 text-slate-600'
+              }`}
+            >
+              Histórico
+            </button>
+            <button
+              onClick={() => handleSelectPreset('30D')}
+              className={`px-3 py-1.5 rounded-xl transition ${
+                preset === '30D'
+                  ? 'bg-white text-emerald-800 shadow-sm font-bold'
+                  : 'hover:text-slate-900 text-slate-600'
+              }`}
+            >
+              30 Días
+            </button>
+            <button
+              onClick={() => handleSelectPreset('THIS_MONTH')}
+              className={`px-3 py-1.5 rounded-xl transition ${
+                preset === 'THIS_MONTH'
+                  ? 'bg-white text-emerald-800 shadow-sm font-bold'
+                  : 'hover:text-slate-900 text-slate-600'
+              }`}
+            >
+              Este Mes
+            </button>
+            <button
+              onClick={() => handleSelectPreset('LAST_MONTH')}
+              className={`px-3 py-1.5 rounded-xl transition ${
+                preset === 'LAST_MONTH'
+                  ? 'bg-white text-emerald-800 shadow-sm font-bold'
+                  : 'hover:text-slate-900 text-slate-600'
+              }`}
+            >
+              Mes Ant.
+            </button>
+            <button
+              onClick={() => handleSelectPreset('THIS_YEAR')}
+              className={`px-3 py-1.5 rounded-xl transition ${
+                preset === 'THIS_YEAR'
+                  ? 'bg-white text-emerald-800 shadow-sm font-bold'
+                  : 'hover:text-slate-900 text-slate-600'
+              }`}
+            >
+              Este Año
+            </button>
+            <button
+              onClick={handleEnableCustomPicker}
+              className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl transition ${
+                preset === 'CUSTOM'
+                  ? 'bg-emerald-600 text-white shadow-sm font-bold'
+                  : 'hover:text-slate-900 text-slate-600'
+              }`}
+            >
+              <CalendarRange className="w-3.5 h-3.5" />
+              <span>Personalizado</span>
+            </button>
+          </div>
         </div>
 
-        {/* Date Filter Pills */}
-        <div className="flex items-center bg-slate-100 p-1 rounded-2xl text-xs font-semibold text-slate-600 space-x-1 border border-slate-200">
-          <button
-            onClick={() => setPreset('ALL')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              preset === 'ALL'
-                ? 'bg-white text-emerald-800 shadow-sm font-bold'
-                : 'hover:text-slate-900 text-slate-600'
-            }`}
-          >
-            Histórico
-          </button>
-          <button
-            onClick={() => setPreset('30D')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              preset === '30D'
-                ? 'bg-white text-emerald-800 shadow-sm font-bold'
-                : 'hover:text-slate-900 text-slate-600'
-            }`}
-          >
-            30 Días
-          </button>
-          <button
-            onClick={() => setPreset('THIS_MONTH')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              preset === 'THIS_MONTH'
-                ? 'bg-white text-emerald-800 shadow-sm font-bold'
-                : 'hover:text-slate-900 text-slate-600'
-            }`}
-          >
-            Este Mes
-          </button>
-          <button
-            onClick={() => setPreset('LAST_MONTH')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              preset === 'LAST_MONTH'
-                ? 'bg-white text-emerald-800 shadow-sm font-bold'
-                : 'hover:text-slate-900 text-slate-600'
-            }`}
-          >
-            Mes Ant.
-          </button>
-          <button
-            onClick={() => setPreset('THIS_YEAR')}
-            className={`px-3 py-1.5 rounded-xl transition ${
-              preset === 'THIS_YEAR'
-                ? 'bg-white text-emerald-800 shadow-sm font-bold'
-                : 'hover:text-slate-900 text-slate-600'
-            }`}
-          >
-            Este Año
-          </button>
-        </div>
+        {/* Custom Calendar Date Picker Toolbar */}
+        {(showCustomPicker || preset === 'CUSTOM') && (
+          <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-900">
+              <Filter className="w-4 h-4 text-emerald-700" />
+              <span>Rango de fechas personalizado:</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2 text-xs">
+                <label className="text-slate-600 font-medium">Desde:</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => {
+                    setCustomStartDate(e.target.value);
+                    setPreset('CUSTOM');
+                  }}
+                  className="bg-white border border-slate-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 text-xs">
+                <label className="text-slate-600 font-medium">Hasta:</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => {
+                    setCustomEndDate(e.target.value);
+                    setPreset('CUSTOM');
+                  }}
+                  className="bg-white border border-slate-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <button
+                onClick={() => {
+                  setCustomStartDate('');
+                  setCustomEndDate('');
+                  handleSelectPreset('ALL');
+                }}
+                className="inline-flex items-center space-x-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 px-2 py-1 rounded-lg hover:bg-slate-200/50 transition"
+                title="Limpiar y volver a Histórico"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Restablecer</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards Grid */}
@@ -249,7 +355,7 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Sync Status & Last Purchase */}
+        {/* Sync Status & Last Purchase with date and time */}
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
           <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
             <span>Última Compra</span>
@@ -257,10 +363,17 @@ export const DashboardPage: React.FC = () => {
               <Calendar className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-xl font-bold text-slate-900 tracking-tight">
-            {summary?.last_purchase_date || 'Sin compras'}
+          <div className="flex items-baseline space-x-2">
+            <span className="text-xl font-bold text-slate-900 tracking-tight">
+              {lastPurchase.date}
+            </span>
+            {lastPurchase.time && (
+              <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                {lastPurchase.time}
+              </span>
+            )}
           </div>
-          <p className="text-xs text-slate-500 flex items-center gap-1 truncate">
+          <p className="text-xs text-slate-500 flex items-center gap-1.5 truncate">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             <span>{summary?.last_sync_at || 'Al día'}</span>
           </p>

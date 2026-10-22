@@ -59,7 +59,7 @@ class AnalyticsService:
         if end_date:
             query = query.where(Receipt.purchase_date <= end_date)
 
-        query = query.order_by(Receipt.purchase_date.desc())
+        query = query.order_by(Receipt.purchase_datetime.desc())
         res = await db.execute(query)
         receipts = res.scalars().all()
 
@@ -89,7 +89,18 @@ class AnalyticsService:
         else:
             median_ticket = round((amounts[count // 2 - 1] + amounts[count // 2]) / 2, 2)
 
-        last_purchase_date = receipts[0].purchase_date.isoformat() if receipts else None
+        if receipts:
+            r0 = receipts[0]
+            if r0.purchase_datetime:
+                last_purchase_date = r0.purchase_datetime.strftime("%Y-%m-%d %H:%M:%S")
+            elif r0.purchase_date and r0.purchase_time:
+                last_purchase_date = f"{r0.purchase_date} {r0.purchase_time}:00" if len(r0.purchase_time) == 5 else f"{r0.purchase_date} {r0.purchase_time}"
+            elif r0.purchase_date:
+                last_purchase_date = r0.purchase_date.isoformat()
+            else:
+                last_purchase_date = None
+        else:
+            last_purchase_date = None
 
         # 2. Count total items purchased in this period
         receipt_ids = [r.id for r in receipts]
