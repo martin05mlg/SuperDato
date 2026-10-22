@@ -165,8 +165,10 @@ export interface AnalyticsSummary {
   receipt_count: number;
   average_ticket: number;
   median_ticket: number;
+  total_items_count?: number;
   last_purchase_date?: string | null;
   last_sync_at?: string | null;
+  period_label?: string | null;
 }
 
 export interface SpendingEvolutionPoint {
@@ -176,18 +178,19 @@ export interface SpendingEvolutionPoint {
 }
 
 export interface CategoryDistributionItem {
-  category_id: string;
   category_name: string;
   color_hex: string;
   total_spend: number;
   percentage: number;
+  items_count?: number;
 }
 
 export interface TopProductItem {
-  product_id: string;
+  product_id?: string | null;
   product_name: string;
   category_name: string;
   total_spend: number;
-  quantity_bought: number;
-  purchase_count: number;
+  total_quantity: number;
+  purchases_count: number;
+  average_price: number;
 }

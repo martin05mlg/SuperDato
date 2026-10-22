@@ -24,9 +24,9 @@ export const ReceiptsListPage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
 
   // Fetch receipts from API
-  const { data: receipts = [], isLoading } = useQuery({
+  const { data: receipts = [], isLoading } = useQuery<Receipt[]>({
     queryKey: ['receipts'],
-    queryFn: receiptsApi.getAll,
+    queryFn: () => receiptsApi.getAll(),
   });
 
   // Handle click on a receipt to view details

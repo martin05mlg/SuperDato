@@ -17,9 +17,9 @@ gantt
     section Fase 4: Histórico y Catálogo
     Catálogo de Productos y Precios Inmutables :done,    p4, after p3, 1d
     section Fase 5: Dashboard
-    Métricas Agregadas y Gráficas Interactivas :active,  p5, after p4, 2d
+    Métricas Agregadas y Gráficas Interactivas :done,    p5, after p4, 2d
     section Fase 6: Estabilización y Calidad
-    Tests E2E, Auditoría y Empaquetado         :         p6, after p5, 1d
+    Tests E2E, Auditoría y Empaquetado         :active,  p6, after p5, 1d
 ```
 
 ---
@@ -33,8 +33,8 @@ gantt
 | **Fase 2: Usuarios y Casas** | Registro, login JWT, roles (Owner, Admin, Member), invitaciones, aislamiento estricto de datos en servidor y gestión de hogares. | **COMPLETADA** | 100% |
 | **Fase 3: Gmail e Importación** | OAuth 2.0 Google, tokens cifrados AES-256, deduplicación por huella digital, tareas Celery/Beat y monitor de importaciones en la web. | **COMPLETADA** | 100% |
 | **Fase 4: Histórico y Catálogo** | Desglose de líneas y fiscalidad IVA, normalización de productos, categorías, histórico de precios inmutables y edición manual protegida. | **COMPLETADA** | 100% |
-| **Fase 5: Dashboard y Analítica** | Consultas agregadas SQL, KPIs de gasto, filtros avanzados y gráficos de series temporales. | **SIGUIENTE** | 0% |
-| **Fase 6: Estabilización y QA** | Batería de pruebas con `pytest`, validación con tickets reales, optimización de Docker Compose y guía de despliegue. | **PENDIENTE** | 0% |
+| **Fase 5: Dashboard y Analítica** | Consultas agregadas SQL, KPIs de gasto, variación MoM, Top productos, filtros dinámicos por fecha y gráficos interactivos. | **COMPLETADA** | 100% |
+| **Fase 6: Estabilización y QA** | Batería de pruebas con `pytest`, validación con tickets reales, optimización de Docker Compose y guía de despliegue. | **SIGUIENTE** | 50% |
 
 ---
 
@@ -50,10 +50,10 @@ gantt
 | **6. Detección y bloqueo de tickets duplicados** | Fase 3 | Restricción `UNIQUE` sobre `deduplication_hash` (SHA-256 de CIF + Factura + Fecha + Total). | **Verificado** |
 | **7. Consulta y corrección manual de tickets** | Fase 4 | Vista de detalle de ticket, formulario de edición con flag `is_manual_override` y `MANUALLY_EDITED` para proteger cambios. | **Verificado** |
 | **8. Histórico disponible y persistente entre sesiones** | Fase 4 | Persistencia relacional en base de datos, catálogo de productos canónicos y observaciones de precios inmutables. | **Verificado** |
-| **9. Dashboard con estadísticas de datos reales** | Fase 5 | Consultas agregadas nativas SQL sobre tickets de la casa activa; gráficas interactivas con Recharts. | Pendiente |
-| **10. Coherencia en los filtros del dashboard** | Fase 5 | Filtro global por rango de fechas aplicado sincrónicamente a todos los gráficos y KPIs. | Pendiente |
+| **9. Dashboard con estadísticas de datos reales** | Fase 5 | Consultas agregadas nativas SQL sobre tickets de la casa activa; KPIs numéricos, variación MoM, Top productos y gráficas interactivas con Recharts. | **Verificado** |
+| **10. Coherencia en los filtros del dashboard** | Fase 5 | Filtro global por rango de fechas (Histórico, 30 días, Este mes, Mes anterior, Año actual) aplicado sincrónicamente a todos los gráficos y KPIs. | **Verificado** |
 | **11. Aislamiento total entre casas ajenas** | Fase 2 | Tests de seguridad que verifican que un usuario sin membresía recibe HTTP 403 / 404 al acceder a datos de otra casa. | **Verificado** |
 | **12. Consulta y recuperación de errores de importación** | Fase 3 | Vista de monitor de importaciones (`import_jobs`) y botón de reintento de procesamiento. | **Verificado** |
-| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 18 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **En progreso (18/18 OK)** |
+| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 20 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **En progreso (20/20 OK)** |
 | **14. Documentación completa de instalación y uso** | Fase 6 | Documentos Markdown en `docs/` y archivo `README.md` con instrucciones de arranque con Docker. | **En progreso** |
 

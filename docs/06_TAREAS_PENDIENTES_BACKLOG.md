@@ -57,14 +57,14 @@ Este documento desglosa todas las tareas técnicas del proyecto SuperDato por do
 ---
 
 ### Dominio 5: Dashboard y Analítica Avanzada (Fase 5)
-- [ ] **TSK-501 (P0)**: Desarrollar consultas agregadas de base de datos en `AnalyticsService`:
+- [x] **TSK-501 (P0)**: Desarrollar consultas agregadas de base de datos en `AnalyticsService`:
   - Gasto total del periodo y comparativa porcentual con el periodo anterior (MoM).
   - Ticket medio, mediana y número de visitas/compras.
   - Gasto agrupado por categoría (gráfico circular/donut con colores asignados).
   - Serie temporal de gasto agrupado por día, semana o mes.
   - Top productos ordenados por importe acumulado y por frecuencia de compra.
-- [ ] **TSK-502 (P0)**: Crear endpoints de analítica (`/api/v1/analytics/...`) con soporte de filtros dinámicos por rango de fechas (últimos 30 días, mes actual, año actual, rango personalizado).
-- [ ] **TSK-503 (P0)**: Implementar componentes visuales en React:
+- [x] **TSK-502 (P0)**: Crear endpoints de analítica (`/api/v1/analytics/...`) con soporte de filtros dinámicos por rango de fechas (últimos 30 días, mes actual, año actual, rango personalizado).
+- [x] **TSK-503 (P0)**: Implementar componentes visuales en React:
   - Tarjetas de KPIs numéricos (Gasto total, Variación MoM, Ticket medio, Total compras).
   - Gráfica interactiva de evolución de gasto temporal (Recharts AreaChart / BarChart).
   - Gráfica de distribución de gasto por categorías (Recharts PieChart con tooltip interactivo).

@@ -74,3 +74,24 @@ async def test_category_distribution(client: AsyncClient):
     assert "category_name" in dist[0]
     assert "total_spend" in dist[0]
 
+
+@pytest.mark.asyncio
+async def test_top_products_analytics(client: AsyncClient):
+    response = await client.get("/api/v1/analytics/top-products?limit=5")
+    assert response.status_code == 200
+    top = response.json()
+    assert len(top) > 0
+    assert "product_name" in top[0]
+    assert "total_spend" in top[0]
+    assert top[0]["total_spend"] > 0
+
+
+@pytest.mark.asyncio
+async def test_analytics_with_date_range(client: AsyncClient):
+    response = await client.get("/api/v1/analytics/summary?start_date=2026-01-01&end_date=2026-12-31")
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_spend" in data
+    assert "receipt_count" in data
+
+

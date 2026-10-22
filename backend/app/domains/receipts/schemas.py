@@ -78,25 +78,9 @@ class ReceiptDetailResponse(ReceiptResponse):
     tax_lines: List[ReceiptTaxLineResponse] = []
 
 
-class AnalyticsSummaryResponse(BaseModel):
-    total_spend: float
-    previous_spend: float
-    spend_variation_pct: float
-    receipt_count: int
-    average_ticket: float
-    median_ticket: float
-    last_purchase_date: Optional[str] = None
-    last_sync_at: Optional[str] = None
-
-
-class CategoryDistributionResponse(BaseModel):
-    category_name: str
-    color_hex: str
-    total_spend: float
-    percentage: float
-
-
-class SpendingPointResponse(BaseModel):
-    date: str
-    total_amount: float
-    receipt_count: int
+from app.domains.analytics.schemas import (
+    AnalyticsSummaryResponse,
+    CategoryDistributionResponse,
+    SpendingPointResponse,
+    TopProductResponse,
+)

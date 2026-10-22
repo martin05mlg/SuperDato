@@ -8,11 +8,18 @@ import type {
   AnalyticsSummary,
   CategoryDistributionItem,
   SpendingEvolutionPoint,
+  TopProductItem,
 } from '../types';
 
+export interface AnalyticsFilterParams {
+  household_id?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 export const receiptsApi = {
-  getAll: async (): Promise<ReceiptResponse[]> => {
-    const res = await apiClient.get<ReceiptResponse[]>('/receipts');
+  getAll: async (params?: AnalyticsFilterParams): Promise<ReceiptResponse[]> => {
+    const res = await apiClient.get<ReceiptResponse[]>('/receipts', { params });
     return res.data;
   },
 
@@ -42,18 +49,23 @@ export const receiptsApi = {
     return res.data;
   },
 
-  getAnalyticsSummary: async (): Promise<AnalyticsSummary> => {
-    const res = await apiClient.get<AnalyticsSummary>('/analytics/summary');
+  getAnalyticsSummary: async (params?: AnalyticsFilterParams): Promise<AnalyticsSummary> => {
+    const res = await apiClient.get<AnalyticsSummary>('/analytics/summary', { params });
     return res.data;
   },
 
-  getCategoryDistribution: async (): Promise<CategoryDistributionItem[]> => {
-    const res = await apiClient.get<CategoryDistributionItem[]>('/analytics/category-distribution');
+  getCategoryDistribution: async (params?: AnalyticsFilterParams): Promise<CategoryDistributionItem[]> => {
+    const res = await apiClient.get<CategoryDistributionItem[]>('/analytics/category-distribution', { params });
     return res.data;
   },
 
-  getSpendingEvolution: async (): Promise<SpendingEvolutionPoint[]> => {
-    const res = await apiClient.get<SpendingEvolutionPoint[]>('/analytics/spending-evolution');
+  getSpendingEvolution: async (params?: AnalyticsFilterParams): Promise<SpendingEvolutionPoint[]> => {
+    const res = await apiClient.get<SpendingEvolutionPoint[]>('/analytics/spending-evolution', { params });
+    return res.data;
+  },
+
+  getTopProducts: async (params?: AnalyticsFilterParams & { limit?: number }): Promise<TopProductItem[]> => {
+    const res = await apiClient.get<TopProductItem[]>('/analytics/top-products', { params });
     return res.data;
   },
 };
