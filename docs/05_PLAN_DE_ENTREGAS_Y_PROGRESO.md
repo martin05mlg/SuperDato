@@ -35,6 +35,7 @@ gantt
 | **Fase 4: Histórico y Catálogo** | Desglose de líneas y fiscalidad IVA, normalización de productos, categorías, histórico de precios inmutables y edición manual protegida. | **COMPLETADA** | 100% |
 | **Fase 5: Dashboard y Analítica** | Consultas agregadas SQL, KPIs de gasto, variación MoM, Top productos, filtros dinámicos por fecha y gráficos interactivos. | **COMPLETADA** | 100% |
 | **Fase 6: Estabilización y QA** | Batería de 20 pruebas con `pytest` (<3s), validación con tickets reales de Gmail, variables de entorno y documentación de despliegue. | **COMPLETADA** | 100% |
+| **Fase E: Enriquecimiento Mercadona Online (Opcional)** | Integración opt-in con la API de Mercadona: fotos CDN oficiales, marcas, envases y motor de fuzzy matching configurable por hogar. | **DISEÑO COMPLETADO** | Fase E.1 (100%) |
 
 ---
 

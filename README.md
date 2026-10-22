@@ -104,4 +104,5 @@ Diseñada para hogares y usuarios particulares, permite conocer los hábitos de 
 - [`docs/04_RIESGOS_Y_DECISIONES_TECNICAS.md`](docs/04_RIESGOS_Y_DECISIONES_TECNICAS.md): Análisis de riesgos y mitigaciones de seguridad.
 - [`docs/05_PLAN_DE_ENTREGAS_Y_PROGRESO.md`](docs/05_PLAN_DE_ENTREGAS_Y_PROGRESO.md): Seguimiento de fases y criterios de aceptación.
 - [`docs/06_TAREAS_PENDIENTES_BACKLOG.md`](docs/06_TAREAS_PENDIENTES_BACKLOG.md): Backlog granular de tareas.
+- [`docs/07_DISENO_INTEGRACION_MERCADONA_CATALOG_ONLINE.md`](docs/07_DISENO_INTEGRACION_MERCADONA_CATALOG_ONLINE.md): Diseño técnico de la integración opcional con la API web de Mercadona (enriquecimiento de catálogo, fotos CDN y marcas).
 

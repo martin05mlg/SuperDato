@@ -89,3 +89,13 @@ Este documento desglosa todas las tareas técnicas del proyecto SuperDato por do
 - [x] **TSK-702 (P0)**: Validar casos límite: tickets con productos vendidos al peso, tickets con devoluciones/descuentos, tickets duplicados, intentos de acceso no autorizado entre casas.
 - [x] **TSK-703 (P1)**: Documentar variables de entorno en `.env.example` y redactar `README.md` detallado para puesta en marcha con un solo comando (`docker compose up -d`).
 - [x] **TSK-704 (P1)**: Verificar la ausencia de fugas de credenciales en logs y validar políticas de seguridad (Argon2id, tokens cifrados AES-256, Fernet).
+
+---
+
+### Dominio 8: Integración Opcional con Mercadona Online (Enriquecimiento y Fotos) — Backlog de Mejora
+- [x] **TSK-801 (P1)**: Investigar la API de `tienda.mercadona.es` y redactar el documento de diseño de arquitectura y especificación técnica ([`docs/07_DISENO_INTEGRACION_MERCADONA_CATALOG_ONLINE.md`](docs/07_DISENO_INTEGRACION_MERCADONA_CATALOG_ONLINE.md)).
+- [ ] **TSK-802 (P2)**: Extender el modelo de base de datos con la tabla `mercadona_online_products`, campos de enriquecimiento en `products` (`enriched_name`, `image_url`, `brand`, `enrichment_status`) y campo `settings` en `households`.
+- [ ] **TSK-803 (P2)**: Implementar el cliente asíncrono `MercadonaStorefrontClient` para descargar y almacenar el snapshot del catálogo online en la base de datos local por código postal / almacén logístico (`wh`).
+- [ ] **TSK-804 (P2)**: Diseñar el motor de emparejamiento difuso (*Fuzzy Matching*) con diccionario de abreviaturas frecuentes de TPV, similitud por tokens (*Token Set Ratio*) y validación por rango de precio unitario ($\pm 25\%$).
+- [ ] **TSK-805 (P2)**: Implementar interfaz de usuario: interruptor de activación y selector de código postal en `SettingsPage.tsx`, miniaturas de producto en `ProductsPage.tsx` y `ReceiptDetailModal.tsx`, y modal de resolución de sugerencias dudosas.
+- [ ] **TSK-806 (P2)**: Configurar tarea programada en Celery Beat para refresco mensual del snapshot y escribir batería de tests unitarios de coincidencia léxica.
