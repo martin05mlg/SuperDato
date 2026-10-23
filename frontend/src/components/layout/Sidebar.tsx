@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Receipt,
   Package,
+  ClipboardList,
   ArrowDownToLine,
   Settings,
   Sparkles,
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/receipts', label: 'Tickets', icon: Receipt },
   { to: '/products', label: 'Productos y Precios', icon: Package },
+  { to: '/shopping-list', label: 'Lista de la Compra', icon: ClipboardList },
   { to: '/imports', label: 'Importaciones y Gmail', icon: ArrowDownToLine },
   { to: '/settings', label: 'Ajustes del Hogar', icon: Settings },
 ];

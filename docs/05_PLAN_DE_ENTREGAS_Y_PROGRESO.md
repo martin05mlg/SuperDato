@@ -20,6 +20,8 @@ gantt
     Métricas Agregadas y Gráficas Interactivas :done,    p5, after p4, 2d
     section Fase 6: Estabilización y Calidad
     Tests E2E, Auditoría y Empaquetado         :done,    p6, after p5, 1d
+    section Fase 7: Nuevas Funcionalidades
+    Tickets Manuales, PWA, Presupuesto y Lista :done,    p7, after p6, 1d
 ```
 
 ---
@@ -34,8 +36,9 @@ gantt
 | **Fase 3: Gmail e Importación** | OAuth 2.0 Google, tokens cifrados AES-256, deduplicación por huella digital, tareas Celery/Beat y monitor de importaciones en la web. | **COMPLETADA** | 100% |
 | **Fase 4: Histórico y Catálogo** | Desglose de líneas y fiscalidad IVA, normalización de productos, categorías, histórico de precios inmutables y edición manual protegida. | **COMPLETADA** | 100% |
 | **Fase 5: Dashboard y Analítica** | Consultas agregadas SQL, KPIs de gasto, variación MoM, Top productos, filtros dinámicos por fecha y gráficos interactivos. | **COMPLETADA** | 100% |
-| **Fase 6: Estabilización y QA** | Batería de 20 pruebas con `pytest` (<3s), validación con tickets reales de Gmail, variables de entorno y documentación de despliegue. | **COMPLETADA** | 100% |
-| **Fase E: Enriquecimiento Mercadona Online (Opcional)** | Integración opt-in con la API de Mercadona: fotos CDN oficiales, marcas, envases y motor de fuzzy matching configurable por hogar. | **DISEÑO COMPLETADO** | Fase E.1 (100%) |
+| **Fase 6: Estabilización y QA** | Batería de pruebas con `pytest` (<3s), validación con tickets reales de Gmail, variables de entorno y documentación de despliegue. | **COMPLETADA** | 100% |
+| **Fase E: Enriquecimiento Mercadona Online** | Integración opt-in con la API de Mercadona: fotos CDN oficiales, marcas, envases y motor de fuzzy matching configurable por hogar. | **COMPLETADA** | 100% |
+| **Fase 7: Funcionalidades Avanzadas y PWA** | Ingestión manual de tickets, exportación Excel CSV / JSON, PWA instalable, presupuesto mensual familiar, alertas de inflación, marcas blancas y lista inteligente con Modo Supermercado. | **COMPLETADA** | 100% |
 
 ---
 
@@ -55,8 +58,9 @@ gantt
 | **10. Coherencia en los filtros del dashboard** | Fase 5 | Filtro global por rango de fechas (Histórico, 30 días, Este mes, Mes anterior, Año actual y selector personalizado por calendario con fechas Desde/Hasta) aplicado sincrónicamente a todos los gráficos y KPIs. | **Verificado** |
 | **11. Aislamiento total entre casas ajenas** | Fase 2 | Tests de seguridad que verifican que un usuario sin membresía recibe HTTP 403 / 404 al acceder a datos de otra casa. | **Verificado** |
 | **12. Consulta y recuperación de errores de importación** | Fase 3 | Vista de monitor de importaciones (`import_jobs`) y botón de reintento de procesamiento. | **Verificado** |
-| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 20 tests automatizados en `pytest tests/` pasando al 100% en menos de 3s. | **Verificado** |
+| **13. Suite de pruebas automáticas aprobada** | Fase 6 | 29 tests automatizados en `pytest tests/` pasando al 100% en menos de 3.5s. | **Verificado** |
 | **14. Documentación completa de instalación y uso** | Fase 6 | Documentos Markdown en `docs/` y archivo `README.md` con instrucciones de arranque con Docker. | **Verificado** |
+| **15. Nuevas características avanzadas y PWA** | Fase 7 | Ingestión manual, exportación Excel, PWA, presupuestos familiares, detección de inflación y lista inteligente. | **Verificado** |
 
 ---
 
@@ -64,19 +68,23 @@ gantt
 
 A fecha actual, el entorno de desarrollo y pruebas se encuentra totalmente estabilizado y operando sobre datos reales de tickets de Mercadona:
 
-1. **Ingestión Real de Tickets**:
-   - **19 tickets procesados y persistidos** bajo el hogar activo unificado (`00000000-0000-0000-0000-000000000002`).
+1. **Ingestión Real de Tickets y Entrada Manual**:
+   - **Tickets procesados y persistidos** bajo el hogar activo unificado (`00000000-0000-0000-0000-000000000002`).
    - Sincronización OAuth 2.0 con Gmail operativa escaneando remitente oficial de Mercadona y descargando adjuntos PDF.
-   - Conciliación contable exacta al céntimo (0.00 € de discrepancia) en líneas de producto, IVA desglosado (4%, 10%, 21%) e importe total.
+   - Asistente de Ingestión Manual de tickets con cálculo contable en tiempo real de bases e IVA (4%, 10%, 21%).
+   - Conciliación contable exacta al céntimo (0.00 € de discrepancia) en líneas de producto, IVA desglosado e importe total.
 
-2. **Dashboard y Analítica Avanzada**:
-   - Selector temporal con presets dinámicos y **filtro nativo por calendario personalizado** (`Desde` y `Hasta`) con reactividad inmediata sobre TanStack Query.
-   - Cálculo preciso de variación MoM con respecto a periodos homólogos equivalentes.
-   - Tarjeta de **Última Compra** con visualización unificada de fecha (`2026-10-16`) y hora de compra en caja (`11:46:00`).
-   - Gráfica temporal interactiva con Recharts y desglose porcentual por categorías asignadas a la paleta oficial.
+2. **Dashboard, Finanzas y Analítica Avanzada**:
+   - Presupuesto mensual por hogar con indicador visual de consumo, saldo restante y proyección matemática de gasto a fin de mes.
+   - Telemetría de cuota de marcas blancas (Hacendado, Bosque Verde, Deliplus, Compy) vs marcas de fabricante.
+   - Detección de inflación y badges de variación porcentual de precio en cada línea de ticket contra la compra anterior.
+   - Selector temporal con presets dinámicos y filtro nativo por calendario personalizado con reactividad inmediata.
 
-3. **Frontend & UX**:
-   - Identidad visual completa: Favicon oficial en SVG de SuperDato, título contextual en pestaña de navegador (`SuperDato — Mercadona Ticket Tracker`) y tema esmeralda.
-   - Modal de detalle y edición de tickets con visualización de líneas de producto y líneas fiscales de IVA.
+3. **Lista de la Compra y Experiencia de Usuario (PWA)**:
+   - Lista interactiva sincronizada con estimación en tiempo real del coste total de la cesta y sugerencias predictivas de reposición.
+   - "Modo Supermercado" táctil a pantalla completa para uso ágil en tienda.
+   - PWA instalable con Service Worker y soporte nativo para dispositivos móviles y escritorio.
+   - Exportación de tickets a Excel compatible con la configuración regional de España (`;`, `,` y BOM UTF-8) y backup en JSON.
+   - Suite de 29 pruebas automáticas pasando al 100% en el backend.
 
 

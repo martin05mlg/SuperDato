@@ -5,6 +5,12 @@ import { receiptsApi } from '../../api/receipts.api';
 import { useHousehold } from '../../context/HouseholdContext';
 import type { Receipt } from '../../types';
 import { ReceiptDetailModal } from '../../components/receipts/ReceiptDetailModal';
+import { ManualReceiptModal } from '../../components/receipts/ManualReceiptModal';
+import {
+  exportReceiptsSummaryCsv,
+  exportFullReceiptLinesCsv,
+  exportReceiptsJson,
+} from '../../utils/export';
 import {
   Receipt as ReceiptIcon,
   Search,
@@ -19,6 +25,11 @@ import {
   Clock,
   ArrowRight,
   CheckCheck,
+  Plus,
+  Download,
+  FileSpreadsheet,
+  FileJson,
+  ChevronDown,
 } from 'lucide-react';
 
 export const ReceiptsListPage: React.FC = () => {
@@ -32,6 +43,9 @@ export const ReceiptsListPage: React.FC = () => {
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExportingLines, setIsExportingLines] = useState(false);
 
   // Assignment states
   const [assigningId, setAssigningId] = useState<string | null>(null);
@@ -161,6 +175,28 @@ export const ReceiptsListPage: React.FC = () => {
     );
   });
 
+  const handleExportFullLines = async () => {
+    try {
+      setIsExportingLines(true);
+      setIsExportMenuOpen(false);
+      const detailedReceipts = await Promise.all(
+        filteredReceipts.map(async (r) => {
+          if (r.lines && r.lines.length > 0) return r;
+          try {
+            return await receiptsApi.getById(r.id);
+          } catch {
+            return r;
+          }
+        })
+      );
+      exportFullReceiptLinesCsv(detailedReceipts, activeHousehold?.name || 'hogar');
+    } catch (err) {
+      alert('Error al exportar las líneas de tickets.');
+    } finally {
+      setIsExportingLines(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -172,8 +208,86 @@ export const ReceiptsListPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Upload Button */}
-        <div>
+        {/* Action Buttons: Manual, Upload, Export */}
+        <div className="flex items-center flex-wrap gap-2.5">
+          {/* Export Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
+              disabled={filteredReceipts.length === 0 || isExportingLines}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl text-xs shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Exportar datos a Excel o JSON"
+            >
+              {isExportingLines ? (
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+              ) : (
+                <Download className="w-4 h-4 text-slate-500" />
+              )}
+              <span>Exportar</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {isExportMenuOpen && (
+              <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 py-1.5 divide-y divide-slate-100 animate-in fade-in zoom-in-95">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    exportReceiptsSummaryCsv(filteredReceipts, activeHousehold?.name || 'hogar');
+                  }}
+                  className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Excel — Resumen de Tickets</div>
+                    <div className="text-[10px] text-slate-400">1 fila por ticket (fecha, tienda, total)</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportFullLines}
+                  className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Excel — Detalle de Artículos</div>
+                    <div className="text-[10px] text-slate-400">Desglose completo producto a producto</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    exportReceiptsJson(filteredReceipts, activeHousehold?.name || 'hogar');
+                  }}
+                  className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 transition"
+                >
+                  <FileJson className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Copia de Seguridad JSON</div>
+                    <div className="text-[10px] text-slate-400">Formato para archivo o migración</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* New Manual Receipt Button */}
+          {activeHousehold && (
+            <button
+              type="button"
+              onClick={() => setIsManualModalOpen(true)}
+              className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-2.5 rounded-xl text-xs shadow-sm transition"
+            >
+              <Plus className="w-4 h-4 text-emerald-400" />
+              <span>+ Ticket Manual</span>
+            </button>
+          )}
+
+          {/* Upload PDF Button */}
           <label className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2.5 rounded-xl text-sm shadow-sm transition cursor-pointer">
             {isUploading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -489,6 +603,21 @@ export const ReceiptsListPage: React.FC = () => {
               : `Aún no hay tickets registrados en ${activeHousehold?.name || 'este hogar'}. Sube tu primer ticket en PDF con el botón superior.`}
           </p>
         </div>
+      )}
+
+      {/* Manual Receipt Modal */}
+      {activeHousehold && (
+        <ManualReceiptModal
+          isOpen={isManualModalOpen}
+          onClose={() => setIsManualModalOpen(false)}
+          householdId={activeHousehold.id}
+          onSuccess={(receiptId) => {
+            queryClient.invalidateQueries({ queryKey: ['receipts'] });
+            queryClient.invalidateQueries({ queryKey: ['analytics'] });
+            queryClient.invalidateQueries({ queryKey: ['catalog-products'] });
+            handleViewDetail(receiptId);
+          }}
+        />
       )}
 
       {/* Modal with Full Line Items and Taxes */}

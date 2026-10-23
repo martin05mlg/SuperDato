@@ -163,6 +163,49 @@ class AnalyticsService:
             spend_variation = 0.0
             comparison_label = None
 
+        # 4. Household Monthly Budget & Projection
+        monthly_budget = None
+        current_month_spend = None
+        budget_spent_pct = None
+        budget_remaining = None
+        projected_month_spend = None
+        days_in_month = None
+        current_day_of_month = None
+
+        if household_id:
+            from app.domains.households.models import Household
+            import calendar
+
+            hh = await db.get(Household, household_id)
+            if hh and hh.settings and "monthly_budget" in hh.settings:
+                try:
+                    b_val = float(hh.settings["monthly_budget"])
+                    if b_val > 0:
+                        monthly_budget = b_val
+                except (ValueError, TypeError):
+                    monthly_budget = None
+
+            today = date.today()
+            first_day_of_month = date(today.year, today.month, 1)
+            _, num_days = calendar.monthrange(today.year, today.month)
+            days_in_month = num_days
+            current_day_of_month = today.day
+
+            cur_month_stmt = select(func.coalesce(func.sum(Receipt.total_amount), 0.0)).where(
+                Receipt.household_id == household_id,
+                Receipt.assignment_status == "ASSIGNED",
+                Receipt.purchase_date >= first_day_of_month,
+                Receipt.purchase_date <= today,
+            )
+            current_month_spend = round(float((await db.execute(cur_month_stmt)).scalar_one() or 0.0), 2)
+
+            if monthly_budget:
+                budget_spent_pct = round((current_month_spend / monthly_budget) * 100, 1)
+                budget_remaining = round(monthly_budget - current_month_spend, 2)
+                if current_day_of_month > 0:
+                    daily_rate = current_month_spend / current_day_of_month
+                    projected_month_spend = round(daily_rate * days_in_month, 2)
+
         return {
             "total_spend": round(total_spend, 2),
             "previous_spend": round(prev_spend, 2),
@@ -179,6 +222,13 @@ class AnalyticsService:
             "min_ticket_amount": min_ticket,
             "shopping_frequency_days": shopping_frequency_days,
             "monthly_average_spend": monthly_average_spend,
+            "monthly_budget": monthly_budget,
+            "current_month_spend": current_month_spend,
+            "budget_spent_pct": budget_spent_pct,
+            "budget_remaining": budget_remaining,
+            "projected_month_spend": projected_month_spend,
+            "days_in_month": days_in_month,
+            "current_day_of_month": current_day_of_month,
         }
 
     @staticmethod
@@ -528,10 +578,70 @@ class AnalyticsService:
                 "percentage_of_tax": pct_of_tax,
             })
 
+        # Calculate Brand Share (Marcas Propias de Mercadona vs Fabricante)
+        all_lines_stmt = (
+            select(
+                ReceiptLine.line_total,
+                ReceiptLine.raw_description,
+                Product.brand,
+                Product.canonical_name,
+            )
+            .join(Receipt, ReceiptLine.receipt_id == Receipt.id)
+            .outerjoin(Product, ReceiptLine.product_id == Product.id)
+            .where(Receipt.id.in_(receipt_ids))
+        )
+        all_l_res = await db.execute(all_lines_stmt)
+        lines_data = all_l_res.all()
+
+        own_brands_keywords = ["HACENDADO", "BOSQUE VERDE", "DELIPLUS", "COMPY", "MAY"]
+        own_brand_spend = 0.0
+        own_brand_count = 0
+        external_brand_spend = 0.0
+        external_brand_count = 0
+
+        for row in lines_data:
+            lt = float(row.line_total or 0.0)
+            brand_str = (row.brand or "").upper()
+            raw_desc = (row.raw_description or "").upper()
+            canon_desc = (row.canonical_name or "").upper()
+
+            is_own = any(k in brand_str or k in raw_desc or k in canon_desc for k in own_brands_keywords)
+            if is_own:
+                own_brand_spend += lt
+                own_brand_count += 1
+            else:
+                external_brand_spend += lt
+                external_brand_count += 1
+
+        total_brand_spend = (own_brand_spend + external_brand_spend) or 1.0
+        own_pct = round((own_brand_spend / total_brand_spend) * 100, 1)
+        ext_pct = round((external_brand_spend / total_brand_spend) * 100, 1)
+
+        brand_share = [
+            {
+                "brand_type": "MARCAS_PROPIAS",
+                "label": "Marcas Propias (Hacendado, Bosque Verde, Deliplus)",
+                "total_spend": round(own_brand_spend, 2),
+                "percentage": own_pct,
+                "items_count": own_brand_count,
+                "color_hex": "#10B981",
+            },
+            {
+                "brand_type": "MARCAS_FABRICANTE",
+                "label": "Marcas de Fabricante",
+                "total_spend": round(external_brand_spend, 2),
+                "percentage": ext_pct,
+                "items_count": external_brand_count,
+                "color_hex": "#6366F1",
+            },
+        ]
+
         return {
             "weekday_distribution": weekday_dist,
             "top_stores": top_stores,
             "basket_composition": basket_composition,
+            "brand_share": brand_share,
+            "own_brands_percentage": own_pct,
             "tax_breakdown": tax_breakdown,
             "total_tax_paid": round(total_tax_paid, 2),
             "favorite_day": favorite_day,

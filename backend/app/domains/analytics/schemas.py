@@ -19,6 +19,13 @@ class AnalyticsSummaryResponse(BaseModel):
     min_ticket_amount: Optional[float] = None
     shopping_frequency_days: Optional[float] = None
     monthly_average_spend: Optional[float] = None
+    monthly_budget: Optional[float] = None
+    current_month_spend: Optional[float] = None
+    budget_spent_pct: Optional[float] = None
+    budget_remaining: Optional[float] = None
+    projected_month_spend: Optional[float] = None
+    days_in_month: Optional[int] = None
+    current_day_of_month: Optional[int] = None
 
 
 class CategoryDistributionResponse(BaseModel):
@@ -82,10 +89,21 @@ class BasketCompositionItem(BaseModel):
     items_count: int
 
 
+class BrandShareItem(BaseModel):
+    brand_type: str
+    label: str
+    total_spend: float
+    percentage: float
+    items_count: int
+    color_hex: str
+
+
 class HouseholdHabitsResponse(BaseModel):
     weekday_distribution: List[WeekdayDistributionItem]
     top_stores: List[StoreDistributionItem]
     basket_composition: List[BasketCompositionItem] = []
+    brand_share: Optional[List[BrandShareItem]] = None
+    own_brands_percentage: Optional[float] = None
     tax_breakdown: Optional[List[TaxBreakdownItem]] = None
     total_tax_paid: Optional[float] = None
     favorite_day: Optional[str] = None

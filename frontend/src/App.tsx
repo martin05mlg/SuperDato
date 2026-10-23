@@ -8,6 +8,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ReceiptsListPage } from './pages/receipts/ReceiptsListPage';
 import { ProductsPage } from './pages/products/ProductsPage';
+import { ShoppingListPage } from './pages/shopping/ShoppingListPage';
 import { ImportsPage } from './pages/imports/ImportsPage';
 import { GoogleCallbackPage } from './pages/imports/GoogleCallbackPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
@@ -67,6 +68,7 @@ export const App: React.FC = () => {
                 <Route index element={<DashboardPage />} />
                 <Route path="receipts" element={<ReceiptsListPage />} />
                 <Route path="products" element={<ProductsPage />} />
+                <Route path="shopping-list" element={<ShoppingListPage />} />
                 <Route path="imports" element={<ImportsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="admin" element={<AdminDashboardPage />} />

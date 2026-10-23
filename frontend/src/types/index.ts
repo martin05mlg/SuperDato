@@ -67,6 +67,8 @@ export interface ReceiptLine {
   brand?: string | null;
   enriched_name?: string | null;
   packaging?: string | null;
+  price_change_pct?: number | null;
+  previous_unit_price?: number | null;
 }
 
 export interface ReceiptLineUpdate {
@@ -88,6 +90,7 @@ export interface Receipt {
   company_cif: string;
   store_address?: string | null;
   store_city?: string | null;
+  store_postal_code?: string | null;
   invoice_number: string;
   store_code?: string | null;
   purchase_datetime: string;
@@ -112,6 +115,31 @@ export interface ReceiptUpdate {
   purchase_date?: string;
   total_amount?: number;
   status?: string;
+}
+
+export interface ManualReceiptLineCreate {
+  raw_description: string;
+  product_id?: string | null;
+  quantity: number;
+  unit_of_measure: string;
+  unit_price: number;
+  discount_amount?: number;
+  tax_rate_percent?: number;
+  is_weighed_item?: boolean;
+  weight_in_kg?: number | null;
+  image_url?: string | null;
+  brand?: string | null;
+}
+
+export interface ManualReceiptCreate {
+  household_id: string;
+  purchase_datetime?: string;
+  invoice_number?: string;
+  store_address?: string;
+  store_city?: string;
+  store_postal_code?: string;
+  payment_method?: string;
+  lines: ManualReceiptLineCreate[];
 }
 
 export type ReceiptResponse = Receipt;
@@ -234,6 +262,13 @@ export interface AnalyticsSummary {
   min_ticket_amount?: number | null;
   shopping_frequency_days?: number | null;
   monthly_average_spend?: number | null;
+  monthly_budget?: number | null;
+  current_month_spend?: number | null;
+  budget_spent_pct?: number | null;
+  budget_remaining?: number | null;
+  projected_month_spend?: number | null;
+  days_in_month?: number | null;
+  current_day_of_month?: number | null;
 }
 
 export interface SpendingEvolutionPoint {
@@ -297,10 +332,21 @@ export interface BasketCompositionItem {
   items_count: number;
 }
 
+export interface BrandShareItem {
+  brand_type: string;
+  label: string;
+  total_spend: number;
+  percentage: number;
+  items_count: number;
+  color_hex: string;
+}
+
 export interface HouseholdHabits {
   weekday_distribution: WeekdayDistributionItem[];
   top_stores: StoreDistributionItem[];
   basket_composition: BasketCompositionItem[];
+  brand_share?: BrandShareItem[];
+  own_brands_percentage?: number | null;
   tax_breakdown?: TaxBreakdownItem[];
   total_tax_paid?: number;
   favorite_day?: string | null;
@@ -357,5 +403,68 @@ export interface SystemInfo {
   total_households: number;
   total_receipts: number;
   server_time: string;
+}
+
+export interface ShoppingItem {
+  id: string;
+  household_id: string;
+  product_id?: string | null;
+  name: string;
+  quantity: number;
+  unit_of_measure: string;
+  estimated_unit_price?: number | null;
+  estimated_total: number;
+  is_checked: boolean;
+  checked_at?: string | null;
+  notes?: string | null;
+  category_name: string;
+  category_color: string;
+  image_url?: string | null;
+  brand?: string | null;
+  created_at: string;
+}
+
+export interface ShoppingListSummary {
+  items: ShoppingItem[];
+  total_count: number;
+  checked_count: number;
+  pending_count: number;
+  estimated_total_cost: number;
+  estimated_checked_cost: number;
+  estimated_pending_cost: number;
+}
+
+export interface ShoppingSuggestion {
+  product_id: string;
+  name: string;
+  category_name: string;
+  category_color: string;
+  image_url?: string | null;
+  brand?: string | null;
+  latest_price?: number | null;
+  unit_of_measure: string;
+  avg_frequency_days: number;
+  days_since_last_purchase: number;
+  purchases_count: number;
+  reason: string;
+}
+
+export interface ShoppingItemCreatePayload {
+  household_id: string;
+  name: string;
+  product_id?: string | null;
+  quantity?: number;
+  unit_of_measure?: string;
+  estimated_unit_price?: number | null;
+  notes?: string | null;
+}
+
+export interface ShoppingItemUpdatePayload {
+  name?: string;
+  quantity?: number;
+  unit_of_measure?: string;
+  estimated_unit_price?: number | null;
+  is_checked?: boolean;
+  notes?: string | null;
 }
 

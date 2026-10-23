@@ -34,6 +34,11 @@ export const SettingsPage: React.FC = () => {
   const [isSavingName, setIsSavingName] = useState(false);
   const [nameSavedSuccess, setNameSavedSuccess] = useState(false);
 
+  // State for Monthly Budget
+  const [monthlyBudgetInput, setMonthlyBudgetInput] = useState('');
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
+  const [budgetSaveSuccess, setBudgetSaveSuccess] = useState(false);
+
   // State for joining household via token
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinToken, setJoinToken] = useState('');
@@ -62,6 +67,13 @@ export const SettingsPage: React.FC = () => {
       if (activeHousehold.settings) {
         setMercadonaEnabled(!!activeHousehold.settings.mercadona_online_enabled);
         setMercadonaPostalCode(activeHousehold.settings.mercadona_postal_code || '50007');
+        setMonthlyBudgetInput(
+          activeHousehold.settings.monthly_budget
+            ? String(activeHousehold.settings.monthly_budget)
+            : ''
+        );
+      } else {
+        setMonthlyBudgetInput('');
       }
     }
   }, [activeHousehold]);
@@ -85,6 +97,32 @@ export const SettingsPage: React.FC = () => {
       alert(err.response?.data?.detail || 'Error al actualizar el nombre del hogar.');
     } finally {
       setIsSavingName(false);
+    }
+  };
+
+  const handleSaveBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeHousehold) return;
+    try {
+      setIsSavingBudget(true);
+      const val = parseFloat(monthlyBudgetInput);
+      const budgetNum = isNaN(val) || val <= 0 ? null : val;
+      const updatedSettings = {
+        ...(activeHousehold.settings || {}),
+        monthly_budget: budgetNum,
+      };
+      const updated = await householdsApi.update(activeHousehold.id, {
+        settings: updatedSettings,
+      });
+      await refreshHouseholds();
+      setActiveHousehold(updated);
+      queryClient.invalidateQueries({ queryKey: ['analytics-summary'] });
+      setBudgetSaveSuccess(true);
+      setTimeout(() => setBudgetSaveSuccess(false), 3000);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al guardar el presupuesto.');
+    } finally {
+      setIsSavingBudget(false);
     }
   };
 
@@ -302,7 +340,7 @@ export const SettingsPage: React.FC = () => {
           <span>Configuración General</span>
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm pt-2">
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Nombre del Hogar</span>
@@ -373,6 +411,44 @@ export const SettingsPage: React.FC = () => {
               <Shield className="w-4 h-4" />
               <span>{activeHousehold?.role || 'OWNER'}</span>
             </div>
+          </div>
+
+          {/* Monthly Budget Setting */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+            <span className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">
+              Presupuesto Mensual
+            </span>
+            <form onSubmit={handleSaveBudget} className="space-y-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  step="10"
+                  min="0"
+                  placeholder="Sin límite"
+                  value={monthlyBudgetInput}
+                  onChange={(e) => setMonthlyBudgetInput(e.target.value)}
+                  disabled={!canManageHousehold}
+                  className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded-lg font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-xs text-slate-500 font-semibold">€</span>
+                {canManageHousehold && (
+                  <button
+                    type="submit"
+                    disabled={isSavingBudget}
+                    className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition shrink-0"
+                    title="Guardar presupuesto mensual"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {budgetSaveSuccess && (
+                <div className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 animate-in fade-in">
+                  <Check className="w-3 h-3" />
+                  <span>Presupuesto guardado</span>
+                </div>
+              )}
+            </form>
           </div>
         </div>
       </div>

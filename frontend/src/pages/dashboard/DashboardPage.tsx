@@ -24,6 +24,8 @@ import {
   MapPin,
   Layers,
   AlertCircle,
+  Target,
+  Tag,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -507,6 +509,97 @@ export const DashboardPage: React.FC = () => {
         </div>
       )}
 
+      {/* Monthly Budget Progress Widget */}
+      {summary?.monthly_budget ? (
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/10">
+                <Target className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Presupuesto Mensual: {summary.monthly_budget.toFixed(2)} €
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      (summary.budget_spent_pct || 0) > 100
+                        ? 'bg-rose-100 text-rose-800'
+                        : (summary.budget_spent_pct || 0) > 80
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {summary.budget_spent_pct || 0}% consumido
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Llevas gastados <strong className="text-slate-800 font-semibold">{summary.current_month_spend?.toFixed(2) || '0.00'} €</strong> en lo que va de mes
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs bg-slate-50 px-3.5 py-2 rounded-2xl border border-slate-100">
+              <div>
+                <span className="text-slate-400 block text-[10px]">Proyección fin de mes</span>
+                <span
+                  className={`font-bold font-mono ${
+                    (summary.projected_month_spend || 0) > summary.monthly_budget
+                      ? 'text-rose-600'
+                      : 'text-emerald-700'
+                  }`}
+                >
+                  ~{summary.projected_month_spend?.toFixed(2) || '0.00'} €
+                </span>
+              </div>
+              <div className="border-l border-slate-200 pl-4">
+                <span className="text-slate-400 block text-[10px]">Restante disponible</span>
+                <span
+                  className={`font-bold font-mono ${
+                    (summary.budget_remaining || 0) < 0 ? 'text-rose-600' : 'text-slate-800'
+                  }`}
+                >
+                  {summary.budget_remaining?.toFixed(2) || '0.00'} €
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                (summary.budget_spent_pct || 0) > 100
+                  ? 'bg-rose-500'
+                  : (summary.budget_spent_pct || 0) > 80
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-500'
+              }`}
+              style={{ width: `${Math.min(100, Math.max(0, summary.budget_spent_pct || 0))}%` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-emerald-50/70 to-teal-50/40 p-4 rounded-3xl border border-emerald-200/60 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <Target className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-800">Fija un presupuesto mensual para tu hogar</div>
+              <div className="text-[11px] text-slate-500">SuperDato proyectará tu consumo diario para mantener tus finanzas bajo control.</div>
+            </div>
+          </div>
+          <Link
+            to="/settings"
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm shrink-0 transition"
+          >
+            Configurar Presupuesto
+          </Link>
+        </div>
+      )}
+
       {/* Main Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Spending History Chart */}
@@ -768,7 +861,7 @@ export const DashboardPage: React.FC = () => {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Weekdays Distribution Card */}
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
               <div>
@@ -938,6 +1031,59 @@ export const DashboardPage: React.FC = () => {
                 <span className="font-bold text-emerald-700">
                   {habits.basket_composition?.find((g) => g.group_name.includes('Frescos'))?.percentage || 0}% de tu presupuesto
                 </span>
+              </div>
+            </div>
+
+            {/* Brand Share Card: Hacendado vs Fabricante */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Marcas Hacendado</h3>
+                      <p className="text-[11px] text-slate-400">Marca propia vs fabricante</p>
+                    </div>
+                  </div>
+                  {habits.own_brands_percentage !== undefined && habits.own_brands_percentage !== null && (
+                    <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      {habits.own_brands_percentage}% Hacendado
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {habits.brand_share && habits.brand_share.length > 0 ? (
+                    habits.brand_share.map((b) => (
+                      <div key={b.brand_type} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-800 truncate">{b.label}</span>
+                          <span className="font-mono text-slate-600 shrink-0">
+                            {b.total_spend.toFixed(2)} € ({b.percentage}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${Math.min(100, Math.max(0, b.percentage))}%`,
+                              backgroundColor: b.color_hex,
+                            }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-slate-400 text-right">{b.items_count} artículos</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-400 py-4 text-center">Sin datos de marcas</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                Priorizar marcas propias de Mercadona reduce el coste de tu cesta familiar de forma continuada.
               </div>
             </div>
           </div>

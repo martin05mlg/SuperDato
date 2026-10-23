@@ -11,6 +11,7 @@ from app.domains.auth.models import User
 from app.domains.households.models import HouseholdMembership
 from app.domains.households.permissions import Role, get_current_user
 from app.domains.receipts.schemas import (
+    ManualReceiptCreate,
     ReceiptAssignHouseholdRequest,
     ReceiptBulkAssignRequest,
     ReceiptDetailResponse,
@@ -259,6 +260,44 @@ async def update_receipt_line(
             detail=f"Línea con ID '{line_id}' en ticket '{receipt_id}' no encontrada.",
         )
     return updated_line
+
+
+@router.post("/manual", response_model=ReceiptDetailResponse, status_code=status.HTTP_201_CREATED)
+async def create_manual_receipt(
+    data: ManualReceiptCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Creates a new receipt manually item-by-item.
+    Calculates totals, taxes, normalizes lines, links catalog products and records price observations.
+    """
+    try:
+        target_hh_uuid = uuid.UUID(data.household_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ID de hogar no válido.",
+        )
+
+    if not current_user.is_superuser:
+        res = await db.execute(
+            select(HouseholdMembership).where(
+                HouseholdMembership.household_id == target_hh_uuid,
+                HouseholdMembership.user_id == current_user.id,
+            )
+        )
+        if not res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: No perteneces al hogar seleccionado.",
+            )
+
+    return await ReceiptService.create_manual_receipt(
+        db=db,
+        data=data,
+        user_id=current_user.id,
+    )
 
 
 @router.post("/upload", response_model=ReceiptDetailResponse, status_code=status.HTTP_201_CREATED)

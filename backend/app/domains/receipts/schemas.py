@@ -22,6 +22,8 @@ class ReceiptLineResponse(BaseModel):
     brand: Optional[str] = None
     enriched_name: Optional[str] = None
     packaging: Optional[str] = None
+    price_change_pct: Optional[float] = None
+    previous_unit_price: Optional[float] = None
 
 
 class ReceiptLineUpdate(BaseModel):
@@ -85,6 +87,29 @@ class ReceiptAssignHouseholdRequest(BaseModel):
 class ReceiptBulkAssignRequest(BaseModel):
     receipt_ids: List[str]
     household_id: str
+
+
+class ManualReceiptLineCreate(BaseModel):
+    raw_description: str
+    product_id: Optional[str] = None
+    quantity: float = 1.0
+    unit_of_measure: str = "ud"
+    unit_price: float
+    discount_amount: float = 0.0
+    tax_rate_percent: float = 10.0
+    is_weighed_item: bool = False
+    weight_in_kg: Optional[float] = None
+
+
+class ManualReceiptCreate(BaseModel):
+    household_id: str
+    purchase_datetime: Optional[str] = None
+    invoice_number: Optional[str] = None
+    store_address: Optional[str] = None
+    store_city: Optional[str] = None
+    store_postal_code: Optional[str] = None
+    payment_method: Optional[str] = "TARJETA"
+    lines: List[ManualReceiptLineCreate]
 
 
 class ReceiptDetailResponse(ReceiptResponse):

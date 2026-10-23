@@ -5,6 +5,7 @@ import type {
   ReceiptLine,
   ReceiptLineUpdate,
   ReceiptUpdate,
+  ManualReceiptCreate,
   AnalyticsSummary,
   CategoryDistributionItem,
   SpendingEvolutionPoint,
@@ -36,6 +37,11 @@ export const receiptsApi = {
 
   updateLine: async (receiptId: string, lineId: string, data: ReceiptLineUpdate): Promise<ReceiptLine> => {
     const res = await apiClient.patch<ReceiptLine>(`/receipts/${receiptId}/lines/${lineId}`, data);
+    return res.data;
+  },
+
+  createManualReceipt: async (data: ManualReceiptCreate): Promise<Receipt> => {
+    const res = await apiClient.post<Receipt>('/receipts/manual', data);
     return res.data;
   },
 

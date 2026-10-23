@@ -102,3 +102,39 @@ Este documento desglosa todas las tareas técnicas del proyecto SuperDato por do
   - Miniaturas oficiales de producto (36-40px), badges de marca (Hacendado, Bosque Verde, Deliplus, Compy), enlace directo a la web oficial y modal de confirmación/descarte de sugerencias en `ProductsPage.tsx`.
   - Miniaturas oficiales y datos enriquecidos en cada línea del modal de desglose de ticket `ReceiptDetailModal.tsx`.
 - [x] **TSK-806 (P1)**: Escribir suite completa de pruebas unitarias e integración en `tests/domains/test_catalog.py` (23 tests pasando al 100%) cubriendo resolución de almacenes, marcas, coincidencia léxica difusa y endpoints de búsqueda, confirmación y descarte.
+
+---
+
+### Dominio 9: Funcionalidades Avanzadas de Usuario, Movilidad y Hábitos (Fase 7 - Completada)
+- [x] **TSK-901 (P0)**: Ingestión Manual de Tickets:
+  - Esquemas Pydantic `ManualReceiptCreate` y `ManualReceiptLineCreate` con validación de tipos impositivos y unidades.
+  - Servicio `create_manual_receipt` con auto-generación de número de factura contable, desglose y conciliación automática de bases y cuotas de IVA (4%, 10%, 21%), resolución canónica de productos y registro de `PriceObservation`.
+  - Endpoint `POST /api/v1/receipts/manual` con control RBAC y aislamiento multi-hogar.
+  - Componente modal `ManualReceiptModal.tsx` con autocompletado en catálogo, conmutador de kg/ud y panel contable en tiempo real.
+  - Tests automáticos en `backend/tests/domains/test_manual_receipts.py`.
+- [x] **TSK-902 (P0)**: Exportación Universal de Datos:
+  - Generador de CSV en español con delimitador `;`, coma decimal `,` y UTF-8 BOM (`\uFEFF`) para apertura nativa e inmediata en Microsoft Excel.
+  - Exportación de resumen de tickets y exportación detallada línea a línea con enriquecimiento de categorías y marcas.
+  - Exportación de copia de seguridad íntegra en formato JSON anidado.
+  - Menú desplegable interactivo "Exportar" en `ReceiptsListPage.tsx`.
+- [x] **TSK-903 (P0)**: Soporte PWA e Instalación Móvil:
+  - Manifiesto web estándar (`frontend/public/manifest.webmanifest`) configurado en modo `standalone` con color temático esmeralda `#059669`.
+  - Service Worker de caché de shell (`frontend/public/sw.js`) con auto-registro en `frontend/src/main.tsx`.
+  - Metaetiquetas para soporte de Web App en iOS (*Apple Mobile Web App Capable*) y Android.
+- [x] **TSK-904 (P1)**: Presupuesto Mensual por Hogar y Proyecciones:
+  - Campo de configuración presupuestaria persistido en `households.settings["monthly_budget"]`.
+  - Endpoint de analítica extendido con gasto acumulado del mes, porcentaje consumido, saldo restante y proyección matemática de cierre de mes.
+  - Componente de barra de progreso con velocímetro visual en `DashboardPage.tsx` y configuración editable en `SettingsPage.tsx`.
+- [x] **TSK-905 (P1)**: Alertas de Inflación y Variación de Precios:
+  - Cálculo dinámico de delta porcentual e histórico inmediato contra la última compra del mismo producto en `get_receipt_detail`.
+  - Badges visuales cromáticos (`+15%` rojo / `-5%` verde) en las líneas de detalle de ticket (`ReceiptDetailModal.tsx`).
+- [x] **TSK-906 (P1)**: Métricas de Hábitos: Cuota de Marcas Blancas:
+  - Agregación analítica de gasto en marcas propias de Mercadona (Hacendado, Bosque Verde, Deliplus, Compy) frente a marcas de fabricante comercial.
+  - Nueva tarjeta analítica de Hábitos en el Dashboard indicando porcentaje sobre el gasto total e importe acumulado.
+- [x] **TSK-907 (P0)**: Lista de la Compra Inteligente y "Modo Supermercado":
+  - Dominio modular `backend/app/domains/shopping/` (`models.py`, `schemas.py`, `services.py`, `router.py`).
+  - Modelo relacional `ShoppingListItem` con sincronización de estado, cantidades, notas y sugerencias.
+  - Algoritmo predictivo de sugerencias de reposición en `/api/v1/shopping/suggestions` basado en productos frecuentes no comprados recientemente.
+  - Vista reactiva `ShoppingListPage.tsx` con estimador de coste de la cesta en tiempo real según precios de catálogo.
+  - "Modo Supermercado" a pantalla completa optimizado para uso táctil con una sola mano en los pasillos de la tienda.
+  - Tests automáticos en `backend/tests/domains/test_shopping_list.py` (29 de 29 tests pasando en la suite global).

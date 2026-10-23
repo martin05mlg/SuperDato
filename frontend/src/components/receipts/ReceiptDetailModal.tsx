@@ -321,7 +321,23 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
                           {line.quantity} {line.unit_of_measure}
                         </td>
                         <td className="py-2 px-3 text-right text-slate-600">
-                          {line.unit_price.toFixed(2)} €
+                          <div>{line.unit_price.toFixed(2)} €</div>
+                          {line.price_change_pct !== undefined && line.price_change_pct !== null && (
+                            <span
+                              className={`inline-block px-1 py-0.5 rounded text-[9px] font-bold mt-0.5 ${
+                                line.price_change_pct > 0
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              }`}
+                              title={
+                                line.previous_unit_price
+                                  ? `Precio anterior registrado: ${line.previous_unit_price.toFixed(2)} € (${line.price_change_pct > 0 ? '+' : ''}${line.price_change_pct}%)`
+                                  : undefined
+                              }
+                            >
+                              {line.price_change_pct > 0 ? `↑ +${line.price_change_pct}%` : `↓ ${line.price_change_pct}%`}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 px-3 text-right font-bold text-slate-900">
                           {line.line_total.toFixed(2)} €

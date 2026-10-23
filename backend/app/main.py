@@ -11,6 +11,7 @@ import app.domains.households.models
 import app.domains.integrations.models
 import app.domains.catalog.models
 import app.domains.receipts.models
+import app.domains.shopping.models
 
 
 @asynccontextmanager
@@ -52,6 +53,7 @@ from app.domains.catalog.router import router as catalog_router
 from app.domains.analytics.router import router as analytics_router
 from app.domains.integrations.router import router as integrations_router
 from app.domains.admin.router import router as admin_router
+from app.domains.shopping.router import router as shopping_router
 
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
 app.include_router(households_router, prefix=settings.API_V1_PREFIX)
@@ -60,6 +62,7 @@ app.include_router(catalog_router, prefix=settings.API_V1_PREFIX)
 app.include_router(analytics_router, prefix=settings.API_V1_PREFIX)
 app.include_router(integrations_router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
+app.include_router(shopping_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/", tags=["Root"])

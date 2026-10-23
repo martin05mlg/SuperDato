@@ -444,6 +444,29 @@ class ReceiptService:
                 for l in receipt.lines:
                     prod_name = l.product.canonical_name if l.product else l.raw_description
                     cat_name = l.product.category.name if (l.product and l.product.category) else "Otros"
+
+                    # Check for previous price observation to compute inflation / price difference
+                    price_change_pct = None
+                    previous_unit_price = None
+                    if receipt.household_id and l.product_id:
+                        prev_obs_stmt = (
+                            select(PriceObservation)
+                            .where(
+                                PriceObservation.household_id == receipt.household_id,
+                                PriceObservation.product_id == l.product_id,
+                                PriceObservation.observed_at < receipt.purchase_datetime,
+                            )
+                            .order_by(PriceObservation.observed_at.desc())
+                            .limit(1)
+                        )
+                        prev_obs = (await db.execute(prev_obs_stmt)).scalar_one_or_none()
+                        if prev_obs and float(prev_obs.unit_price) > 0:
+                            p_old = float(prev_obs.unit_price)
+                            p_new = float(l.unit_price)
+                            previous_unit_price = p_old
+                            if abs(p_new - p_old) >= 0.01:
+                                price_change_pct = round(((p_new - p_old) / p_old) * 100, 1)
+
                     lines.append({
                         "id": str(l.id),
                         "line_order": l.line_order,
@@ -464,6 +487,8 @@ class ReceiptService:
                         "brand": l.product.brand if l.product else None,
                         "enriched_name": l.product.enriched_name if l.product else None,
                         "packaging": l.product.packaging if l.product else None,
+                        "price_change_pct": price_change_pct,
+                        "previous_unit_price": previous_unit_price,
                     })
 
                 taxes = []
@@ -994,3 +1019,183 @@ class ReceiptService:
 
         await db.commit()
         return {"assigned_count": len(receipts)}
+
+    @staticmethod
+    async def create_manual_receipt(
+        db: AsyncSession,
+        data: Any,
+        user_id: Any,
+    ) -> Dict[str, Any]:
+        """Creates a manual receipt with lines, tax lines and price observations in database."""
+        import hashlib
+        from fastapi import HTTPException, status
+        u_uuid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        h_uuid = uuid.UUID(str(data.household_id)) if not isinstance(data.household_id, uuid.UUID) else data.household_id
+
+        # Verify membership
+        from app.domains.households.models import HouseholdMembership
+        mem_stmt = select(HouseholdMembership).where(
+            HouseholdMembership.household_id == h_uuid,
+            HouseholdMembership.user_id == u_uuid,
+        )
+        mem = (await db.execute(mem_stmt)).scalar_one_or_none()
+        if not mem:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No perteneces al hogar seleccionado.",
+            )
+
+        if not data.lines:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El ticket debe contener al menos un producto.",
+            )
+
+        # Parse purchase datetime
+        if data.purchase_datetime:
+            try:
+                p_dt = datetime.fromisoformat(data.purchase_datetime.replace("Z", "+00:00"))
+            except Exception:
+                p_dt = datetime.now(timezone.utc)
+        else:
+            p_dt = datetime.now(timezone.utc)
+
+        p_date = p_dt.date()
+        p_time = p_dt.strftime("%H:%M")
+
+        inv_num = (
+            data.invoice_number.strip()
+            if data.invoice_number and data.invoice_number.strip()
+            else f"MANUAL-{p_date.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        )
+
+        # Calculate totals
+        line_totals = []
+        taxes_map = {}
+
+        for line_item in data.lines:
+            qty = float(line_item.quantity)
+            u_price = float(line_item.unit_price)
+            disc = float(line_item.discount_amount or 0.0)
+            lt = round((qty * u_price) - disc, 2)
+            line_totals.append(lt)
+
+            rate = float(line_item.tax_rate_percent or 10.0)
+            if rate not in taxes_map:
+                taxes_map[rate] = {"taxable_base": 0.0, "tax_amount": 0.0, "total_with_tax": 0.0}
+
+            taxable_base = round(lt / (1.0 + (rate / 100.0)), 2)
+            tax_amt = round(lt - taxable_base, 2)
+
+            taxes_map[rate]["taxable_base"] = round(taxes_map[rate]["taxable_base"] + taxable_base, 2)
+            taxes_map[rate]["tax_amount"] = round(taxes_map[rate]["tax_amount"] + tax_amt, 2)
+            taxes_map[rate]["total_with_tax"] = round(taxes_map[rate]["total_with_tax"] + lt, 2)
+
+        total_amount = round(sum(line_totals), 2)
+        discounts_total = round(sum(float(l.discount_amount or 0.0) for l in data.lines), 2)
+
+        dedup_seed = f"MANUAL:{h_uuid}:{inv_num}:{p_dt.isoformat()}:{total_amount}"
+        deduplication_hash = hashlib.sha256(dedup_seed.encode("utf-8")).hexdigest()
+
+        existing = await db.execute(select(Receipt).where(Receipt.deduplication_hash == deduplication_hash))
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe un ticket manual con estos mismos datos exactos.",
+            )
+
+        receipt = Receipt(
+            id=uuid.uuid4(),
+            household_id=h_uuid,
+            imported_by_user_id=u_uuid,
+            assignment_status="ASSIGNED",
+            company_name="MERCADONA, S.A.",
+            company_cif="A-46103834",
+            store_address=data.store_address,
+            store_city=data.store_city,
+            store_postal_code=data.store_postal_code,
+            invoice_number=inv_num,
+            purchase_datetime=p_dt,
+            purchase_date=p_date,
+            purchase_time=p_time,
+            total_amount=total_amount,
+            discounts_total=discounts_total,
+            payment_method=data.payment_method or "TARJETA",
+            deduplication_hash=deduplication_hash,
+            status="PROCESSED",
+            extraction_warnings=["TICKET_MANUAL"],
+            is_manual_override=True,
+        )
+        db.add(receipt)
+        await db.flush()
+
+        # Add Tax lines
+        for rate, tdata in taxes_map.items():
+            tl = ReceiptTaxLine(
+                id=uuid.uuid4(),
+                receipt_id=receipt.id,
+                tax_rate_percent=rate,
+                taxable_base=tdata["taxable_base"],
+                tax_amount=tdata["tax_amount"],
+                total_with_tax=tdata["total_with_tax"],
+            )
+            db.add(tl)
+
+        # Add Receipt lines
+        for idx, line_item in enumerate(data.lines):
+            prod = None
+            if line_item.product_id:
+                try:
+                    p_uuid = uuid.UUID(line_item.product_id)
+                    prod = await db.get(Product, p_uuid)
+                except ValueError:
+                    prod = None
+
+            if not prod:
+                prod = await CatalogService.get_or_create_product_for_line(
+                    db=db,
+                    raw_description=line_item.raw_description,
+                    unit_of_measure=line_item.unit_of_measure,
+                    weight_in_kg=line_item.weight_in_kg,
+                )
+
+            qty = float(line_item.quantity)
+            u_price = float(line_item.unit_price)
+            disc = float(line_item.discount_amount or 0.0)
+            lt = round((qty * u_price) - disc, 2)
+
+            rl = ReceiptLine(
+                id=uuid.uuid4(),
+                receipt_id=receipt.id,
+                line_order=idx + 1,
+                raw_description=line_item.raw_description.strip(),
+                product_id=prod.id if prod else None,
+                quantity=qty,
+                unit_of_measure=line_item.unit_of_measure,
+                unit_price=u_price,
+                discount_amount=disc,
+                line_total=lt,
+                is_weighed_item=line_item.is_weighed_item,
+                weight_in_kg=line_item.weight_in_kg,
+                validation_status="VALID",
+                is_manual_override=True,
+            )
+            db.add(rl)
+            await db.flush()
+
+            if prod:
+                price_kg_l = u_price if line_item.is_weighed_item else None
+                await CatalogService.record_price_observation(
+                    db=db,
+                    household_id=receipt.household_id,
+                    product_id=prod.id,
+                    receipt_line_id=rl.id,
+                    observed_at=p_dt,
+                    observed_date=p_date,
+                    unit_price=u_price,
+                    price_per_kg_or_l=price_kg_l,
+                    store_code=receipt.store_code,
+                )
+
+        await db.commit()
+        return await ReceiptService.get_receipt_detail(db, str(receipt.id))
