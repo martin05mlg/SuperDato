@@ -54,10 +54,18 @@ async def _async_sync_connection(connection_id_str: str) -> Dict[str, Any]:
         await db.refresh(job)
 
         try:
-            # 1. Refresh access token
-            access_token, updated_enc = await GoogleOAuthClient.refresh_access_token(conn.encrypted_tokens)
-            conn.encrypted_tokens = updated_enc
-            await db.commit()
+            from app.domains.admin.services import AdminService
+            client_id, client_secret, _ = await AdminService.get_effective_google_config(db)
+
+            # 1. Get valid access token (refreshes ONLY if expired)
+            access_token, updated_enc = await GoogleOAuthClient.get_valid_access_token(
+                conn.encrypted_tokens,
+                client_id=client_id,
+                client_secret=client_secret,
+            )
+            if updated_enc != conn.encrypted_tokens:
+                conn.encrypted_tokens = updated_enc
+                await db.commit()
 
             # 2. Search messages
             messages = await GoogleOAuthClient.search_mercadona_messages(access_token)
@@ -119,7 +127,14 @@ async def _async_sync_connection(connection_id_str: str) -> Dict[str, Any]:
             conn.sync_status = "ERROR"
             conn.last_error = str(e)
             await db.commit()
-            raise e
+            return {
+                "job_id": str(job.id),
+                "error": str(e),
+                "messages_found": 0,
+                "imported": 0,
+                "skipped": 0,
+                "errors": 1,
+            }
 
 
 @celery_app.task
@@ -142,4 +157,3 @@ async def _async_sync_all() -> int:
             sync_google_connection_task.delay(str(cid))
             count += 1
         return count
-

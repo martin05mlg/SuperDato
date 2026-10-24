@@ -310,6 +310,11 @@ async def trigger_manual_sync(
         job_id = uuid.UUID(sync_result["job_id"])
         job = await db.get(ImportJob, job_id)
         if job:
+            if job.status == "FAILED" and "error" in sync_result:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Fallo en la sincronización: {sync_result['error']}",
+                )
             return job
 
     query = select(GoogleAccountConnection).where(
@@ -320,6 +325,7 @@ async def trigger_manual_sync(
 
     if conns:
         last_job = None
+        last_error = None
         for conn in conns:
             sync_result = await _async_sync_connection(str(conn.id))
             if "job_id" in sync_result:
@@ -327,7 +333,14 @@ async def trigger_manual_sync(
                 job = await db.get(ImportJob, job_id)
                 if job:
                     last_job = job
+                    if job.status == "FAILED" and "error" in sync_result:
+                        last_error = sync_result["error"]
         if last_job:
+            if last_job.status == "FAILED" and last_error:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Fallo en la sincronización: {last_error}",
+                )
             return last_job
 
     if settings.ENVIRONMENT.lower() == "production":

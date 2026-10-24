@@ -92,15 +92,23 @@ export const ImportsPage: React.FC = () => {
       setIsSyncing(true);
       setSyncFeedback(null);
       const job = await integrationsApi.triggerSync(activeHousehold.id, connectionId);
-      setSyncFeedback(
-        `Sincronización completada: ${job.receipts_imported} tickets nuevos importados, ${job.receipts_skipped} duplicados omitidos.`
-      );
+      if (job.status === 'FAILED') {
+        const errorMsg = job.error_details?.[0]?.general_error || 'Error al conectar con la cuenta de Google.';
+        setSyncFeedback(`Error en la sincronización: ${errorMsg}`);
+      } else {
+        setSyncFeedback(
+          `Sincronización completada: ${job.receipts_imported} tickets nuevos importados, ${job.receipts_skipped} duplicados omitidos.`
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ['importJobs', activeHousehold.id] });
       queryClient.invalidateQueries({ queryKey: ['googleConnections', activeHousehold.id] });
       queryClient.invalidateQueries({ queryKey: ['receipts'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
-    } catch {
-      setSyncFeedback('Error al iniciar la sincronización.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Error al iniciar la sincronización.';
+      setSyncFeedback(msg);
+      queryClient.invalidateQueries({ queryKey: ['importJobs', activeHousehold.id] });
+      queryClient.invalidateQueries({ queryKey: ['googleConnections', activeHousehold.id] });
     } finally {
       setIsSyncing(false);
     }
@@ -128,12 +136,22 @@ export const ImportsPage: React.FC = () => {
       </div>
 
       {syncFeedback && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between text-emerald-800 text-xs animate-in fade-in">
+        <div
+          className={`border rounded-xl p-3 flex items-center justify-between text-xs animate-in fade-in ${
+            syncFeedback.toLowerCase().includes('error') || syncFeedback.toLowerCase().includes('fallo')
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
           <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            {syncFeedback.toLowerCase().includes('error') || syncFeedback.toLowerCase().includes('fallo') ? (
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            )}
             <span>{syncFeedback}</span>
           </div>
-          <button onClick={() => setSyncFeedback(null)} className="text-emerald-500 hover:text-emerald-700">
+          <button onClick={() => setSyncFeedback(null)} className="hover:opacity-75">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -305,10 +323,20 @@ export const ImportsPage: React.FC = () => {
                           <span>Procesando</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center space-x-1 text-rose-600 font-semibold bg-rose-50 px-2.5 py-0.5 rounded-full">
-                          <AlertCircle className="w-3 h-3" />
-                          <span>Error</span>
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="inline-flex items-center space-x-1 text-rose-600 font-semibold bg-rose-50 px-2.5 py-0.5 rounded-full w-fit">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>Error</span>
+                          </span>
+                          {job.error_details && job.error_details[0]?.general_error && (
+                            <span
+                              className="text-[11px] text-rose-600 mt-1 max-w-xs truncate"
+                              title={job.error_details[0].general_error}
+                            >
+                              {job.error_details[0].general_error}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-center font-mono font-medium text-slate-700">

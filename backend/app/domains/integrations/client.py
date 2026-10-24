@@ -102,6 +102,8 @@ class GoogleOAuthClient:
                 raise ValueError(f"Error al canjear código de Google OAuth: {response.text}")
 
             tokens = response.json()
+            now_ts = datetime.now(timezone.utc).timestamp()
+            tokens["expires_at"] = now_ts + tokens.get("expires_in", 3600)
             return tokens
 
     @staticmethod
@@ -117,35 +119,78 @@ class GoogleOAuthClient:
             return res.json().get("email", "")
 
     @staticmethod
-    async def refresh_access_token(encrypted_tokens_str: str) -> Tuple[str, str]:
-        """Decrypts stored tokens, refreshes access_token using refresh_token, and re-encrypts."""
+    async def get_valid_access_token(
+        encrypted_tokens_str: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+    ) -> Tuple[str, str]:
+        """Decrypts stored tokens, returns valid access_token, and only refreshes with Google if needed."""
         tokens_json = decrypt_secret(encrypted_tokens_str)
         tokens = json.loads(tokens_json)
+
+        access_token = tokens.get("access_token")
         refresh_token = tokens.get("refresh_token")
 
+        # Mock token handling (for dev/simulations)
+        if access_token == "mock_token":
+            return "mock_token", encrypted_tokens_str
+
+        # If access_token exists and has not expired (with 2 min buffer)
+        expires_at = tokens.get("expires_at")
+        now_ts = datetime.now(timezone.utc).timestamp()
+        if access_token and expires_at and now_ts < (expires_at - 120):
+            return access_token, encrypted_tokens_str
+
+        # If we need to refresh, ensure we have a refresh_token
         if not refresh_token:
-            raise ValueError("No existe refresh_token almacenado para esta conexión.")
+            if access_token:
+                return access_token, encrypted_tokens_str
+            raise ValueError("No existe refresh_token almacenado para esta cuenta de Google.")
+
+        effective_client_id = client_id or settings.GOOGLE_CLIENT_ID
+        effective_client_secret = client_secret or settings.GOOGLE_CLIENT_SECRET
+
+        if not effective_client_id or not effective_client_secret:
+            raise ValueError(
+                "Faltan las credenciales GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET. "
+                "Configúralas en el Panel de Administración (Ajustes) o en tu archivo .env."
+            )
 
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 GOOGLE_TOKEN_URL,
                 data={
-                    "client_id": settings.GOOGLE_CLIENT_ID,
-                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "client_id": effective_client_id,
+                    "client_secret": effective_client_secret,
                     "refresh_token": refresh_token,
                     "grant_type": "refresh_token",
                 },
             )
 
             if response.status_code != 200:
-                raise ValueError(f"Fallo al renovar token de Google: {response.text}")
+                raise ValueError(f"Fallo al renovar token de Google ({response.status_code}): {response.text}")
 
             new_tokens = response.json()
             tokens["access_token"] = new_tokens["access_token"]
-            tokens["expires_in"] = new_tokens.get("expires_in", 3600)
+            expires_in = new_tokens.get("expires_in", 3600)
+            tokens["expires_in"] = expires_in
+            tokens["expires_at"] = now_ts + expires_in
 
             updated_encrypted = encrypt_secret(json.dumps(tokens))
             return new_tokens["access_token"], updated_encrypted
+
+    @staticmethod
+    async def refresh_access_token(
+        encrypted_tokens_str: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+    ) -> Tuple[str, str]:
+        """Decrypts stored tokens, refreshes access_token using refresh_token, and re-encrypts."""
+        return await GoogleOAuthClient.get_valid_access_token(
+            encrypted_tokens_str,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
 
     @staticmethod
     async def revoke_tokens(encrypted_tokens_str: str) -> bool:
@@ -165,6 +210,11 @@ class GoogleOAuthClient:
     @staticmethod
     async def search_mercadona_messages(access_token: str, query: Optional[str] = None) -> List[Dict[str, str]]:
         """Searches for Mercadona emails containing digital ticket PDFs."""
+        if access_token == "mock_token":
+            from app.domains.receipts.services import get_sample_pdf_paths
+            samples = get_sample_pdf_paths()
+            return [{"id": f"mock_sample_{idx}"} for idx in range(min(5, len(samples)))]
+
         q = query or MERCADONA_GMAIL_QUERY
         messages = []
 
@@ -184,6 +234,18 @@ class GoogleOAuthClient:
     @staticmethod
     async def fetch_pdf_attachment(access_token: str, message_id: str) -> Optional[bytes]:
         """Fetches and decodes the PDF attachment from a specific Gmail message."""
+        if access_token == "mock_token" or message_id.startswith("mock_sample_"):
+            from app.domains.receipts.services import get_sample_pdf_paths
+            samples = get_sample_pdf_paths()
+            try:
+                idx = int(message_id.replace("mock_sample_", ""))
+                if idx < len(samples):
+                    with open(samples[idx], "rb") as f:
+                        return f.read()
+            except Exception:
+                pass
+            return None
+
         async with httpx.AsyncClient(timeout=20.0) as client:
             msg_res = await client.get(
                 f"{GMAIL_MESSAGES_URL}/{message_id}",
