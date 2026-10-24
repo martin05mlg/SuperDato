@@ -117,6 +117,7 @@ class AdminService:
 
         user.hashed_password = hash_password(new_password)
         user.failed_login_attempts = 0
+        user.locked_until = None
         await db.commit()
         return {"status": "success", "message": f"Contraseña restablecida para {user.email}"}
 

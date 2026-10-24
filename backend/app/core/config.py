@@ -1,6 +1,6 @@
 import os
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -63,6 +63,26 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:5173/integrations/google/callback"
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        """Prevents starting in production mode with default/weak cryptographic secrets."""
+        if self.ENVIRONMENT.lower() == "production":
+            if (
+                self.SECRET_KEY.startswith("insecure_dev_secret_key")
+                or len(self.SECRET_KEY) < 32
+            ):
+                raise ValueError(
+                    "Seguridad crítica: En entorno de producción debes configurar un SECRET_KEY seguro de al menos 32 caracteres."
+                )
+            if (
+                self.ENCRYPTION_MASTER_KEY == "01234567890123456789012345678901"
+                or len(self.ENCRYPTION_MASTER_KEY) < 32
+            ):
+                raise ValueError(
+                    "Seguridad crítica: En entorno de producción debes configurar una ENCRYPTION_MASTER_KEY única de al menos 32 caracteres."
+                )
+        return self
 
 
 settings = Settings()

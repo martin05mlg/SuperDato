@@ -25,6 +25,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+def get_password_signature(hashed_password: str) -> str:
+    """Generates a deterministic short signature of the password hash to invalidate tokens upon password change."""
+    return hashlib.sha256((hashed_password or "").encode("utf-8")).hexdigest()[:16]
+
+
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None, claims: Optional[Dict[str, Any]] = None) -> str:
     """Creates a short-lived JWT access token."""
     now = datetime.now(timezone.utc)
@@ -46,7 +51,11 @@ def create_access_token(subject: str, expires_delta: Optional[timedelta] = None,
     return encoded_jwt
 
 
-def create_refresh_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_refresh_token(
+    subject: str,
+    expires_delta: Optional[timedelta] = None,
+    claims: Optional[Dict[str, Any]] = None,
+) -> str:
     """Creates a long-lived JWT refresh token."""
     now = datetime.now(timezone.utc)
     if expires_delta:
@@ -60,6 +69,9 @@ def create_refresh_token(subject: str, expires_delta: Optional[timedelta] = None
         "iat": now,
         "exp": expire,
     }
+    if claims:
+        to_encode.update(claims)
+
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
 

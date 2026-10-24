@@ -12,6 +12,8 @@ from app.domains.auth.models import User
 from app.domains.households.models import HouseholdMembership
 from app.domains.households.permissions import (
     Permission,
+    Role,
+    ROLE_PERMISSIONS,
     get_current_user,
     require_household_permission,
 )
@@ -42,9 +44,10 @@ async def get_google_authorize_url(
 async def google_oauth_callback(
     code: str = Query(...),
     state: str = Query(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Processes Google OAuth callback, exchanges authorization code for tokens, and encrypts them."""
+    """Processes Google OAuth callback, verifies signed state and user permissions, exchanges code for tokens, and encrypts them."""
     try:
         user_id_str, household_id_str = GoogleOAuthClient.decode_state(state)
         user_id = uuid.UUID(user_id_str)
@@ -52,8 +55,28 @@ async def google_oauth_callback(
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Estado OAuth inválido.",
+            detail="Estado OAuth inválido, expirado o manipulado.",
         )
+
+    if not current_user.is_superuser and user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El estado de autorización OAuth no corresponde al usuario autenticado.",
+        )
+
+    if not current_user.is_superuser:
+        mem_res = await db.execute(
+            select(HouseholdMembership).where(
+                HouseholdMembership.household_id == household_id,
+                HouseholdMembership.user_id == current_user.id,
+            )
+        )
+        membership = mem_res.scalar_one_or_none()
+        if not membership or Permission.CONNECT_INTEGRATIONS not in ROLE_PERMISSIONS.get(Role(membership.role), set()):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permisos en este hogar para vincular integraciones de Google.",
+            )
 
     try:
         tokens = await GoogleOAuthClient.exchange_code_for_tokens(code)
@@ -119,6 +142,12 @@ async def connect_mock_google_account(
     db: AsyncSession = Depends(get_db),
 ):
     """Simulates connecting a Google account for local testing without requiring external Google Cloud API keys."""
+    if settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El endpoint de simulación OAuth está deshabilitado en producción.",
+        )
+
     stmt = select(GoogleAccountConnection).where(GoogleAccountConnection.household_id == household_id)
     res = await db.execute(stmt)
     conn = res.scalar_one_or_none()
@@ -191,7 +220,13 @@ async def trigger_manual_sync(
         if job:
             return job
 
-    # Fallback when no Google account is connected
+    if settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No hay ninguna cuenta de Gmail conectada a este hogar.",
+        )
+
+    # Fallback when no Google account is connected (development/testing only)
     job = ImportJob(
         household_id=household_id,
         source_type="GMAIL_MANUAL",

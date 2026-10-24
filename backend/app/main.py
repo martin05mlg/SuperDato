@@ -35,11 +35,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Middleware
+# CORS Middleware: restrict regex to private local network IPs in non-production environments
+cors_origin_regex = (
+    r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+    if settings.ENVIRONMENT.lower() != "production"
+    else None
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_origin_regex=r"^https?://.*",
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

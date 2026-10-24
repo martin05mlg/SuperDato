@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -8,12 +8,16 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    get_password_signature,
     hash_password,
     verify_password,
 )
 from app.domains.auth.models import User, RegistrationToken
 from app.domains.auth.schemas import TokenResponse, UserLogin, UserRegister, UserResponse, UserUpdate
 from app.domains.households.models import Household, HouseholdMembership
+
+MAX_FAILED_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
 
 
 class AuthService:
@@ -97,9 +101,10 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
 
-        # Generate tokens
-        access_token = create_access_token(subject=str(user.id))
-        refresh_token = create_refresh_token(subject=str(user.id))
+        # Generate tokens with password signature claim
+        pwd_sig = get_password_signature(user.hashed_password)
+        access_token = create_access_token(subject=str(user.id), claims={"pwd_sig": pwd_sig})
+        refresh_token = create_refresh_token(subject=str(user.id), claims={"pwd_sig": pwd_sig})
 
         return TokenResponse(
             access_token=access_token,
@@ -113,9 +118,26 @@ class AuthService:
         result = await db.execute(query)
         user = result.scalar_one_or_none()
 
+        # Check temporary account lockout due to brute-force attempts
+        now_utc = datetime.now(timezone.utc)
+        if user and user.locked_until:
+            lock_exp = user.locked_until
+            if lock_exp.tzinfo is None:
+                lock_exp = lock_exp.replace(tzinfo=timezone.utc)
+            if lock_exp > now_utc:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Cuenta bloqueada temporalmente por demasiados intentos fallidos. Inténtalo de nuevo más tarde.",
+                )
+            else:
+                user.locked_until = None
+                user.failed_login_attempts = 0
+
         if not user or not verify_password(data.password, user.hashed_password):
             if user:
                 user.failed_login_attempts += 1
+                if user.failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
+                    user.locked_until = now_utc + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
                 await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -129,12 +151,14 @@ class AuthService:
             )
 
         # Reset failed login attempts upon successful login
-        if user.failed_login_attempts > 0:
+        if user.failed_login_attempts > 0 or user.locked_until is not None:
             user.failed_login_attempts = 0
+            user.locked_until = None
             await db.commit()
 
-        access_token = create_access_token(subject=str(user.id))
-        refresh_token = create_refresh_token(subject=str(user.id))
+        pwd_sig = get_password_signature(user.hashed_password)
+        access_token = create_access_token(subject=str(user.id), claims={"pwd_sig": pwd_sig})
+        refresh_token = create_refresh_token(subject=str(user.id), claims={"pwd_sig": pwd_sig})
 
         return TokenResponse(
             access_token=access_token,
@@ -170,8 +194,17 @@ class AuthService:
                 detail="Usuario no válido para renovación.",
             )
 
-        new_access_token = create_access_token(subject=str(user.id))
-        new_refresh_token = create_refresh_token(subject=str(user.id))
+        # Verify password signature to invalidate refresh tokens issued prior to a password change
+        token_pwd_sig = payload.get("pwd_sig")
+        current_pwd_sig = get_password_signature(user.hashed_password)
+        if token_pwd_sig and token_pwd_sig != current_pwd_sig:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token invalidado tras cambio de contraseña. Inicia sesión nuevamente.",
+            )
+
+        new_access_token = create_access_token(subject=str(user.id), claims={"pwd_sig": current_pwd_sig})
+        new_refresh_token = create_refresh_token(subject=str(user.id), claims={"pwd_sig": current_pwd_sig})
 
         return TokenResponse(
             access_token=new_access_token,
@@ -184,6 +217,16 @@ class AuthService:
         if data.full_name is not None:
             user.full_name = data.full_name.strip()
         if data.password is not None:
+            if not data.current_password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Debes proporcionar tu contraseña actual para establecer una nueva contraseña.",
+                )
+            if not verify_password(data.current_password, user.hashed_password):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="La contraseña actual proporcionada es incorrecta.",
+                )
             user.hashed_password = hash_password(data.password)
 
         await db.commit()

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import decode_token
+from app.core.security import decode_token, get_password_signature
 from app.domains.auth.models import User
 from app.domains.households.models import Household, HouseholdMembership
 
@@ -115,6 +115,15 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cuenta de usuario inactiva o deshabilitada.",
+        )
+
+    # Verify password signature claim if present (invalidates tokens upon password change/reset)
+    token_pwd_sig = payload.get("pwd_sig")
+    if token_pwd_sig and token_pwd_sig != get_password_signature(user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión invalidada por cambio de contraseña. Inicia sesión nuevamente.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user

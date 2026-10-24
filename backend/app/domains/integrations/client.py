@@ -1,9 +1,10 @@
 import base64
 import json
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 import httpx
+import jwt
 from app.core.config import settings
 from app.core.security import decrypt_secret, encrypt_secret
 
@@ -24,13 +25,20 @@ MERCADONA_GMAIL_QUERY = "(from:mercadona OR from:mail.mercadona.com OR subject:m
 class GoogleOAuthClient:
     @staticmethod
     def get_authorization_url(user_id: str, household_id: str) -> str:
-        """Generates Google OAuth 2.0 consent screen URL with signed state."""
+        """Generates Google OAuth 2.0 consent screen URL with cryptographically signed JWT state."""
+        now = datetime.now(timezone.utc)
         state_payload = {
             "u": user_id,
             "h": household_id,
-            "t": datetime.now(timezone.utc).timestamp(),
+            "type": "oauth_state",
+            "iat": now,
+            "exp": now + timedelta(minutes=15),
         }
-        state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode()
+        state_str = jwt.encode(
+            state_payload,
+            settings.SECRET_KEY,
+            algorithm=settings.JWT_ALGORITHM,
+        )
 
         params = {
             "client_id": settings.GOOGLE_CLIENT_ID or "mock-google-client-id",
@@ -45,13 +53,18 @@ class GoogleOAuthClient:
 
     @staticmethod
     def decode_state(state_str: str) -> Tuple[str, str]:
-        """Decodes the state string and extracts user_id and household_id."""
+        """Verifies the cryptographic JWT signature and expiration of state_str and extracts user_id and household_id."""
         try:
-            raw = base64.urlsafe_b64decode(state_str.encode()).decode()
-            data = json.loads(raw)
-            return data["u"], data["h"]
+            data = jwt.decode(
+                state_str,
+                settings.SECRET_KEY,
+                algorithms=[settings.JWT_ALGORITHM],
+            )
+            if data.get("type") != "oauth_state" or not data.get("u") or not data.get("h"):
+                raise ValueError("Payload de estado OAuth inválido.")
+            return str(data["u"]), str(data["h"])
         except Exception:
-            raise ValueError("Estado OAuth de Google inválido o manipulado.")
+            raise ValueError("Estado OAuth de Google inválido, expirado o manipulado.")
 
     @staticmethod
     async def exchange_code_for_tokens(code: str) -> Dict[str, Any]:

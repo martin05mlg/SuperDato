@@ -40,10 +40,9 @@ class TokenRefresh(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
-    password: Optional[str] = None
-    is_active: Optional[bool] = None
-    is_superuser: Optional[bool] = None
+    full_name: Optional[str] = Field(default=None, min_length=2, max_length=150)
+    current_password: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=8)
 
 
 class RegistrationTokenCreate(BaseModel):
