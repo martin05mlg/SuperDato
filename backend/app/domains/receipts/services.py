@@ -440,32 +440,38 @@ class ReceiptService:
             res = await db.execute(stmt)
             receipt = res.scalar_one_or_none()
             if receipt:
+                # Pre-fetch all previous price observations in a single query (resolving N+1 query problem)
+                product_ids = [l.product_id for l in receipt.lines if l.product_id]
+                prev_obs_map: Dict[uuid.UUID, float] = {}
+                if receipt.household_id and product_ids and receipt.purchase_datetime:
+                    batch_stmt = (
+                        select(PriceObservation.product_id, PriceObservation.unit_price)
+                        .where(
+                            PriceObservation.household_id == receipt.household_id,
+                            PriceObservation.product_id.in_(product_ids),
+                            PriceObservation.observed_at < receipt.purchase_datetime,
+                        )
+                        .order_by(PriceObservation.observed_at.desc())
+                    )
+                    batch_res = await db.execute(batch_stmt)
+                    # Because it's ordered by observed_at DESC, the first row per product_id is the immediate previous observation
+                    for p_id, u_price in batch_res.all():
+                        if p_id not in prev_obs_map and u_price is not None and float(u_price) > 0:
+                            prev_obs_map[p_id] = float(u_price)
+
                 lines = []
                 for l in receipt.lines:
                     prod_name = l.product.canonical_name if l.product else l.raw_description
                     cat_name = l.product.category.name if (l.product and l.product.category) else "Otros"
 
-                    # Check for previous price observation to compute inflation / price difference
+                    # Check for previous price observation from pre-fetched map in O(1)
                     price_change_pct = None
-                    previous_unit_price = None
-                    if receipt.household_id and l.product_id:
-                        prev_obs_stmt = (
-                            select(PriceObservation)
-                            .where(
-                                PriceObservation.household_id == receipt.household_id,
-                                PriceObservation.product_id == l.product_id,
-                                PriceObservation.observed_at < receipt.purchase_datetime,
-                            )
-                            .order_by(PriceObservation.observed_at.desc())
-                            .limit(1)
-                        )
-                        prev_obs = (await db.execute(prev_obs_stmt)).scalar_one_or_none()
-                        if prev_obs and float(prev_obs.unit_price) > 0:
-                            p_old = float(prev_obs.unit_price)
-                            p_new = float(l.unit_price)
-                            previous_unit_price = p_old
-                            if abs(p_new - p_old) >= 0.01:
-                                price_change_pct = round(((p_new - p_old) / p_old) * 100, 1)
+                    previous_unit_price = prev_obs_map.get(l.product_id) if l.product_id else None
+                    if previous_unit_price is not None:
+                        p_old = previous_unit_price
+                        p_new = float(l.unit_price)
+                        if abs(p_new - p_old) >= 0.01:
+                            price_change_pct = round(((p_new - p_old) / p_old) * 100, 1)
 
                     lines.append({
                         "id": str(l.id),

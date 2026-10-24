@@ -309,6 +309,13 @@ class MercadonaStorefrontClient:
                 logger.warning(f"Error syncing subcategory {sub_id} ({sub_info['name']}): {e}")
                 continue
 
+        # Invalidate in-memory matcher pool so new items are immediately available for matching
+        try:
+            from app.domains.catalog.matcher import MercadonaMatcherService
+            MercadonaMatcherService.invalidate_cache()
+        except Exception:
+            pass
+
         return {
             "warehouse_code": warehouse_code,
             "subcategories_processed": total_subcats,

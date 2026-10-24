@@ -120,6 +120,39 @@ def token_similarity(query_text: str, candidate_text: str) -> float:
 
 class MercadonaMatcherService:
     """Service to match local products with Mercadona Online storefront items."""
+    _CACHED_ONLINE_POOL: Optional[List[Tuple[MercadonaOnlineProduct, str, set]]] = None
+
+    @classmethod
+    def invalidate_cache(cls):
+        """Invalidates in-memory candidate cache (e.g. after a catalog sync)."""
+        cls._CACHED_ONLINE_POOL = None
+
+    @classmethod
+    async def get_cached_pool(
+        cls, db: AsyncSession, candidate_pool: Optional[List[MercadonaOnlineProduct]] = None
+    ) -> List[Tuple[MercadonaOnlineProduct, str, set]]:
+        """Returns pre-tokenized pool of MercadonaOnlineProduct items."""
+        if candidate_pool is not None:
+            pool = []
+            for item in candidate_pool:
+                norm_c = normalize_string(item.display_name)
+                c_tokens = {stem_token(t) for t in norm_c.split() if t}
+                pool.append((item, norm_c, c_tokens))
+            return pool
+
+        if cls._CACHED_ONLINE_POOL is not None:
+            return cls._CACHED_ONLINE_POOL
+
+        stmt = select(MercadonaOnlineProduct)
+        res = await db.execute(stmt)
+        items = res.scalars().all()
+        pool = []
+        for item in items:
+            norm_c = normalize_string(item.display_name)
+            c_tokens = {stem_token(t) for t in norm_c.split() if t}
+            pool.append((item, norm_c, c_tokens))
+        cls._CACHED_ONLINE_POOL = pool
+        return pool
 
     @classmethod
     async def find_matches_for_product(
@@ -131,18 +164,9 @@ class MercadonaMatcherService:
         limit: int = 5,
     ) -> List[Tuple[MercadonaOnlineProduct, float]]:
         """Finds best matching candidates from mercadona_online_products for a given product."""
-        # Query candidate pool if not passed
-        if candidate_pool is not None:
-            all_online = candidate_pool
-        else:
-            stmt = select(MercadonaOnlineProduct)
-            res = await db.execute(stmt)
-            all_online = res.scalars().all()
-
-        if not all_online:
+        pool = await cls.get_cached_pool(db, candidate_pool)
+        if not pool:
             return []
-
-        scored_candidates: List[Tuple[MercadonaOnlineProduct, float]] = []
 
         # Gather all candidate names from product (canonical name + aliases)
         names_to_test = [product.canonical_name]
@@ -151,12 +175,41 @@ class MercadonaMatcherService:
                 if a.raw_name_normalized and a.raw_name_normalized not in names_to_test:
                     names_to_test.append(a.raw_name_normalized)
 
-        for online_item in all_online:
-            base_score = max(token_similarity(name, online_item.display_name) for name in names_to_test)
-            if base_score < 0.38:
+        # Pre-normalize queries once
+        prepped_queries = []
+        for name in names_to_test:
+            norm_q = normalize_string(name)
+            raw_q = [w for w in norm_q.split() if w]
+            q_tokens = {stem_token(t) for t in raw_q}
+            if q_tokens:
+                prepped_queries.append((norm_q, q_tokens))
+
+        if not prepped_queries:
+            return []
+
+        scored_candidates: List[Tuple[MercadonaOnlineProduct, float]] = []
+
+        for online_item, norm_c, c_tokens in pool:
+            best_base = 0.0
+            for norm_q, q_tokens in prepped_queries:
+                inter = q_tokens.intersection(c_tokens)
+                if not inter:
+                    continue
+                overlap_ratio = len(inter) / len(q_tokens)
+                seq_ratio = SequenceMatcher(None, norm_q, norm_c).ratio()
+                if overlap_ratio >= 0.8:
+                    s = 0.6 * overlap_ratio + 0.4 * seq_ratio + 0.2
+                elif overlap_ratio >= 0.5:
+                    s = 0.5 * overlap_ratio + 0.5 * seq_ratio + 0.1
+                else:
+                    s = 0.5 * overlap_ratio + 0.5 * seq_ratio
+                if s > best_base:
+                    best_base = min(1.0, round(s, 3))
+
+            if best_base < 0.38:
                 continue
 
-            score = base_score
+            score = best_base
 
             # Price similarity weighting: if recent ticket price matches web unit price
             if reference_price and online_item.unit_price and reference_price > 0 and online_item.unit_price > 0:
@@ -166,7 +219,6 @@ class MercadonaMatcherService:
                 diff_pct = diff_eur / max(p_ref, p_on)
 
                 if diff_eur <= 0.02:
-                    # Identical price down to the cent: major confidence boost
                     score = min(1.0, score + 0.22)
                 elif diff_eur <= 0.10 or diff_pct <= 0.05:
                     score = min(1.0, score + 0.14)

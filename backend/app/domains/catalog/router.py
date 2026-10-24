@@ -383,9 +383,6 @@ async def get_mercadona_suggestions(
     """Returns products that have moderate-confidence matching suggestions (score 0.50 - 0.84) or are unenriched for the household."""
     await verify_household_access(household_id, current_user, db)
     from app.domains.catalog.models import PriceObservation
-    online_stmt = select(MercadonaOnlineProduct)
-    online_res = await db.execute(online_stmt)
-    all_online = online_res.scalars().all()
 
     stmt = (
         select(Product)
@@ -417,7 +414,6 @@ async def get_mercadona_suggestions(
             db,
             p,
             reference_price=latest_price,
-            candidate_pool=all_online,
             limit=4,
         )
         if candidates:

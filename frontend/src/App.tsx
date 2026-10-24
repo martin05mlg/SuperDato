@@ -1,20 +1,47 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { HouseholdProvider } from './context/HouseholdContext';
 import { AppLayout } from './components/layout/AppLayout';
 
-import { DashboardPage } from './pages/dashboard/DashboardPage';
-import { ReceiptsListPage } from './pages/receipts/ReceiptsListPage';
-import { ProductsPage } from './pages/products/ProductsPage';
-import { ShoppingListPage } from './pages/shopping/ShoppingListPage';
-import { ImportsPage } from './pages/imports/ImportsPage';
-import { GoogleCallbackPage } from './pages/imports/GoogleCallbackPage';
-import { SettingsPage } from './pages/settings/SettingsPage';
-import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
-import { LoginPage } from './pages/auth/LoginPage';
-import { RegisterPage } from './pages/auth/RegisterPage';
+// Lazy-loaded routes for optimal bundle code-splitting
+const DashboardPage = React.lazy(() =>
+  import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage }))
+);
+const ReceiptsListPage = React.lazy(() =>
+  import('./pages/receipts/ReceiptsListPage').then((m) => ({ default: m.ReceiptsListPage }))
+);
+const ProductsPage = React.lazy(() =>
+  import('./pages/products/ProductsPage').then((m) => ({ default: m.ProductsPage }))
+);
+const ShoppingListPage = React.lazy(() =>
+  import('./pages/shopping/ShoppingListPage').then((m) => ({ default: m.ShoppingListPage }))
+);
+const ImportsPage = React.lazy(() =>
+  import('./pages/imports/ImportsPage').then((m) => ({ default: m.ImportsPage }))
+);
+const GoogleCallbackPage = React.lazy(() =>
+  import('./pages/imports/GoogleCallbackPage').then((m) => ({ default: m.GoogleCallbackPage }))
+);
+const SettingsPage = React.lazy(() =>
+  import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
+);
+const AdminDashboardPage = React.lazy(() =>
+  import('./pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage }))
+);
+const LoginPage = React.lazy(() =>
+  import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage }))
+);
+const RegisterPage = React.lazy(() =>
+  import('./pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage }))
+);
+
+const PageLoader: React.FC = () => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+  </div>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,11 +57,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!isAuthenticated) {
@@ -50,33 +73,35 @@ export const App: React.FC = () => {
       <AuthProvider>
         <HouseholdProvider>
           <BrowserRouter>
-            <Routes>
-              {/* Public Auth Routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/integrations/google/callback" element={<GoogleCallbackPage />} />
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                {/* Public Auth Routes */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/integrations/google/callback" element={<GoogleCallbackPage />} />
 
-              {/* Protected App Routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<DashboardPage />} />
-                <Route path="receipts" element={<ReceiptsListPage />} />
-                <Route path="products" element={<ProductsPage />} />
-                <Route path="shopping-list" element={<ShoppingListPage />} />
-                <Route path="imports" element={<ImportsPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="admin" element={<AdminDashboardPage />} />
-              </Route>
+                {/* Protected App Routes */}
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<DashboardPage />} />
+                  <Route path="receipts" element={<ReceiptsListPage />} />
+                  <Route path="products" element={<ProductsPage />} />
+                  <Route path="shopping-list" element={<ShoppingListPage />} />
+                  <Route path="imports" element={<ImportsPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="admin" element={<AdminDashboardPage />} />
+                </Route>
 
-              {/* Catch-all redirect */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                {/* Catch-all redirect */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </HouseholdProvider>
       </AuthProvider>

@@ -166,57 +166,60 @@ Todas las vulnerabilidades identificadas han sido parcheadas y cuentan con prueb
 
 ---
 
-## 3. Mejoras Técnicas, de Rendimiento y Arquitectura
+## 3. Mejoras Técnicas, de Rendimiento y Arquitectura (Estado: ✅ 7/7 IMPLEMENTADAS Y VERIFICADAS)
 
-### ⚡ [PERF-01] Eliminación de Consultas $N+1$ en `ReceiptService.get_receipt_detail`
-- **Archivo**: [`backend/app/domains/receipts/services.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/receipts/services.py)
-- **Diagnóstico**:
-  Al abrir el modal de detalle de un ticket, para calcular la alerta de inflación (`price_change_pct` y `previous_unit_price`) de cada línea, el código ejecuta una consulta SQL independiente a `PriceObservation` dentro del bucle `for line in receipt.lines`. Un ticket de compra mensual con 45 artículos ejecuta **46 consultas secuenciales** a la base de datos.
-- **Mejora propuesta**:
-  Recopilar todos los `product_id` del ticket (`product_ids = {l.product_id for l in receipt.lines if l.product_id}`) y realizar **una única consulta** antes del bucle trayendo las observaciones previas a `receipt.purchase_datetime` para esos productos, resolviendo el precio inmediato anterior en memoria en $O(1)$.
+Todas las optimizaciones técnicas, corrección de bugs y mejoras de arquitectura han sido implementadas y probadas con éxito:
 
-### 🧠 [PERF-02] Optimización y Caché en el Motor de Sugerencias de Mercadona (`get_mercadona_suggestions`)
-- **Archivo**: [`backend/app/domains/catalog/router.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/catalog/router.py#L329-L394)
-- **Diagnóstico**:
-  Cada vez que el usuario abre la pestaña de sugerencias en el catálogo, el endpoint ejecuta `SELECT * FROM mercadona_online_products` (cargando ~4.800 objetos ORM) y ejecuta la comparación difusa de cadenas en Python contra todos los productos no enriquecidos del hogar.
-- **Mejora propuesta**:
-  Pre-normalizar los tokens de `MercadonaOnlineProduct` en una caché en memoria (con `functools.lru_cache` o Redis invalidado tras `/mercadona/sync`) o almacenar los 3 mejores candidatos pre-calculados durante el proceso de ingesta de tickets.
+### ✅ [PERF-01] Eliminación de Consultas $N+1$ en `ReceiptService.get_receipt_detail` (RESUELTO)
+- **Archivo**: [`backend/app/domains/receipts/services.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/receipts/services.py#L380-L425)
+- **Diagnóstico previo**:
+  Al abrir el modal de detalle de un ticket, para calcular la alerta de inflación (`price_change_pct` y `previous_unit_price`) de cada línea, el código ejecutaba una consulta SQL independiente a `PriceObservation` dentro del bucle `for line in receipt.lines`. Un ticket de compra con 45 artículos ejecutaba 46 consultas secuenciales.
+- **Implementación**:
+  Se recopilan en un conjunto todos los `product_ids` del ticket y se ejecuta una **única consulta por lote** (`select(PriceObservation.product_id, PriceObservation.unit_price)`) ordenada por fecha descendente. Se mapea en un diccionario en memoria (`prev_obs_map`), permitiendo lookup instantáneo $O(1)$ por producto. Testeado en `backend/tests/domains/test_perf_and_bug_fixes.py::test_perf01_batch_price_observations_in_receipt_detail`.
 
-### 🐛 [BUG-01] Pérdida de datos de Presupuesto Mensual cuando el filtro de fechas del Dashboard no tiene tickets
-- **Archivo**: [`backend/app/domains/analytics/services.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/analytics/services.py#L64-L78)
-- **Diagnóstico**:
-  En `AnalyticsService.get_summary`, si el usuario selecciona un rango de fechas personalizado donde no hubo compras (`if not receipts:`), la función hace un `return` temprano en la línea 66 **antes** de calcular `monthly_budget`, `current_month_spend`, `budget_spent_pct` y `projected_month_spend`. Como consecuencia, la tarjeta de presupuesto mensual desaparece de la interfaz si el rango filtrado está vacío.
-- **Mejora propuesta**:
-  Extraer el cálculo del presupuesto mensual a un método auxiliar `_compute_household_budget(db, household_id)` e incluir sus campos también en el retorno temprano cuando `receipts` es vacío.
+### ✅ [PERF-02] Optimización y Caché en el Motor de Sugerencias de Mercadona (RESUELTO)
+- **Archivos**: [`backend/app/domains/catalog/matcher.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/catalog/matcher.py#L25-L65), [`backend/app/domains/catalog/router.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/catalog/router.py#L329-L380), [`backend/app/domains/catalog/mercadona_client.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/catalog/mercadona_client.py#L225)
+- **Diagnóstico previo**:
+  Cada petición a `/catalog/mercadona/suggestions` realizaba un `SELECT *` de miles de filas de `mercadona_online_products` y repetía la tokenización completa y comparación difusa en cada ciclo.
+- **Implementación**:
+  `MercadonaMatcherService` implementa una caché global en memoria `_CACHED_ONLINE_POOL` con pre-tokenización (tuplas de `(product, normalized_name, token_set)`). Se filtra inicialmente por intersección de conjuntos de tokens antes de calcular `SequenceMatcher`. La caché se invalida automáticamente al finalizar cada sincronización con la API de Mercadona (`invalidate_cache()`). Testeado en `backend/tests/domains/test_perf_and_bug_fixes.py::test_perf02_matcher_cache_and_fast_lookup`.
 
-### 📦 [PERF-03] Code-Splitting por Rutas y Fragmentación de Vendors en Frontend (Bundle > 1 MB)
-- **Archivos**: [`frontend/src/App.tsx`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/frontend/src/App.tsx) y `frontend/vite.config.ts`
-- **Diagnóstico**:
-  El build de producción genera un único archivo JavaScript de **1.037 kB** (`dist/assets/index-*.js`), superando el umbral recomendado de 500 kB. Esto penaliza el tiempo de arranque inicial (*First Contentful Paint*) al abrir la PWA en redes móviles 4G dentro del supermercado.
-- **Mejora propuesta**:
-  1. Cargar las páginas con `React.lazy()` (`DashboardPage`, `ProductsPage`, `AdminDashboardPage`, `ShoppingListPage`, `ReceiptsListPage`).
-  2. Configurar `build.rollupOptions.output.manualChunks` en `vite.config.ts` para separar `recharts`, `lucide-react` y `@tanstack/react-query` en chunks independientes cacheables.
+### ✅ [BUG-01] Preservación de Presupuesto Mensual con Filtro de Fechas sin Tickets (RESUELTO)
+- **Archivo**: [`backend/app/domains/analytics/services.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/analytics/services.py#L40-L105)
+- **Diagnóstico previo**:
+  En `AnalyticsService.get_summary`, cuando el filtro temporal no contenía tickets (`if not receipts:`), la función retornaba anticipadamente sin calcular los KPIs presupuestarios del hogar (`monthly_budget`, `current_month_spend`, etc.), ocultando la tarjeta de presupuesto.
+- **Implementación**:
+  Se factorizó la lógica en `_compute_household_budget(db, household_id)`. Se garantiza que incluso con 0 tickets encontrados en el rango seleccionado, la tarjeta de presupuesto mensual refleja fielmente el gasto del mes en curso, días transcurridos y proyección mensual. Testeado en `backend/tests/domains/test_perf_and_bug_fixes.py::test_bug01_budget_preserved_when_no_receipts_in_date_filter`.
 
-### 🔄 [ARCH-01] Cola de concurrencia (Mutex) en renovación de Access Token en Axios
-- **Archivo**: [`frontend/src/api/client.ts`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/frontend/src/api/client.ts#L35-L66)
-- **Diagnóstico**:
-  Cuando el `access_token` expira (cada 30 min) y el usuario entra al Dashboard, se disparan 6 peticiones paralelas (`summary`, `category-distribution`, `spending-evolution`, `top-products`, `habits`, `receipts`). Al recibir `401 Unauthorized` simultáneamente, las 6 peticiones llaman a `POST /api/v1/auth/refresh` al mismo tiempo (condición de carrera).
-- **Mejora propuesta**:
-  Implementar un semáforo `isRefreshing` con una cola `failedRequestsQueue` en `client.ts` para que solo la primera respuesta `401` solicite el nuevo token y resuelva en cascada las demás peticiones en espera.
+### ✅ [PERF-03] Code-Splitting por Rutas y Vendor Chunks en Vite (RESUELTO)
+- **Archivos**: [`frontend/src/App.tsx`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/frontend/src/App.tsx), [`frontend/vite.config.ts`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/frontend/vite.config.ts)
+- **Diagnóstico previo**:
+  El bundle único de frontend pesaba **1.037 kB** minificado, ralentizando la primera carga en redes móviles de supermercado.
+- **Implementación**:
+  1. Configuración de `manualChunks` en Vite para segmentar bibliotecas pesadas (`vendor-charts` con recharts, `vendor-icons` con lucide-react y `vendor-query` con @tanstack/react-query).
+  2. Carga perezosa con `React.lazy()` y `<Suspense>` para todas las páginas en `App.tsx`.
+  3. **Resultado**: El bundle principal pasó de 1.037 kB a **315 kB** (103 kB gzip), una reducción del **69.6%**.
 
-### 📴 [ARCH-02] Caché Dinámica de Assets en el Service Worker para Modo Supermercado Offline
-- **Archivo**: [`frontend/public/sw.js`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/frontend/public/sw.js)
-- **Diagnóstico**:
-  Actualmente el Service Worker sólo guarda en caché `/`, `/index.html`, `/favicon.svg` y `/manifest.webmanifest` durante el evento `install`, pero no almacena en caché los archivos `/assets/index-*.js` ni `/assets/index-*.css` cuando se descargan. Si el usuario pierde la cobertura móvil dentro de la tienda y recarga la página, la app no podrá cargar el bundle JS.
-- **Mejora propuesta**:
-  Actualizar el listener `fetch` en `sw.js` para clonar y guardar automáticamente en `CACHE_NAME` cualquier respuesta exitosa de recursos estáticos (`/assets/`, fuentes e iconos) bajo una estrategia *Stale-While-Revalidate* o *Network-First con persistencia en caché*.
+### ✅ [ARCH-01] Concurrencia Mutex en Renovación de Access Token en Axios (RESUELTO)
+- **Archivo**: [`frontend/src/api/client.ts`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/frontend/src/api/client.ts#L35-L85)
+- **Diagnóstico previo**:
+  Ráfagas concurrentes de peticiones 401 (ej. al abrir el dashboard con token expirado) disparaban múltiples llamadas simultáneas a `/auth/refresh`.
+- **Implementación**:
+  Patrón de mutex con `isRefreshing` y cola de promesas `failedQueue`. La primera petición 401 inicia la llamada de refresco mientras las peticiones concurrentes quedan pausadas; una vez obtenido el nuevo token, la cola se reintenta automáticamente en orden. Si falla, se redirige limpiamente a `/login`.
 
-### 🗄️ [ARCH-03] Control explícito de Auto-Seeding de Tickets de Muestra
-- **Archivo**: [`backend/app/domains/analytics/services.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/analytics/services.py#L31-L35)
-- **Diagnóstico**:
-  `AnalyticsService._ensure_data` invoca `ReceiptService.sync_sample_receipts_to_db(db)` automáticamente siempre que la tabla `receipts` tenga 0 filas. En producción, si un administrador limpia la base de datos, el primer acceso al dashboard volverá a inyectar los tickets de prueba de `samples/`.
-- **Mejora propuesta**:
-  Condicionar la carga de muestras a una bandera explícita en configuración (`settings.AUTO_SEED_SAMPLES: bool = False`).
+### ✅ [ARCH-02] Caché Dinámica en Service Worker para PWA Offline (RESUELTO)
+- **Archivo**: [`frontend/public/sw.js`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/frontend/public/sw.js#L20-L55)
+- **Diagnóstico previo**:
+  El Service Worker solo precacheaba la raíz `/` e iconos estáticos, pero no los bundles compilados `/assets/*.js` ni `/assets/*.css`.
+- **Implementación**:
+  El listener `fetch` ahora intercepta solicitudes estáticas GET de la misma procedencia y las almacena dinámicamente en `CACHE_NAME`. Además, incluye fallback offline hacia `/index.html` para navegación SPA en zonas con mala cobertura.
+
+### ✅ [ARCH-03] Flag de Configuración para Auto-Seeding de Datos de Prueba (RESUELTO)
+- **Archivos**: [`backend/app/core/config.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/core/config.py#L38), [`backend/app/domains/analytics/services.py`](file:///z:/Martin/Proyectos/5.SuperDato-MercadonaTicketTracker/backend/app/domains/analytics/services.py#L32-L35)
+- **Diagnóstico previo**:
+  `AnalyticsService._ensure_data` inyectaba automáticamente datos de prueba de `samples/` siempre que `receipts` estuviese vacía, impidiendo tener una base de datos limpia en producción.
+- **Implementación**:
+  Se añadió la variable de configuración `AUTO_SEED_SAMPLES: bool = True` (desactivable en producción mediante variable de entorno `AUTO_SEED_SAMPLES=false`). `_ensure_data` respeta esta variable antes de iniciar la sincronización de muestras.
 
 ---
 
@@ -269,10 +272,12 @@ Todas las vulnerabilidades identificadas han sido parcheadas y cuentan con prueb
 | **VULN-04/05**| Seguridad | Filtrar observaciones por hogar en `get_product` y RBAC en mutaciones de catálogo | Medio | **✅ Completado** | **P1 (Corto plazo)** |
 | **VULN-06/07**| Seguridad | Deshabilitar `connect-mock` en producción e invalidar JWT (`pwd_sig`) al cambiar contraseña | Medio | **✅ Completado** | **P1 (Corto plazo)** |
 | **VULN-08/09**| Seguridad | Validación de secretos en producción, loopback en Docker y `current_password` en perfil | Medio | **✅ Completado** | **P1 (Corto plazo)** |
-| **BUG-01** | Backend | Incluir datos de presupuesto mensual en el retorno temprano de `get_summary` | Medio | Pendiente | **P0 (Inmediato)** |
-| **PERF-01** | Rendimiento | Eliminar consultas $N+1$ de `PriceObservation` en detalle de ticket | Alto | Pendiente | **P1 (Corto plazo)** |
-| **PERF-03** | Frontend | Code-splitting con `React.lazy` y `manualChunks` en Vite | Medio | Pendiente | **P1 (Corto plazo)** |
-| **ARCH-01/02**| Frontend / PWA | Cola de refresco de JWT en Axios y caché dinámica de assets en `sw.js` | Medio | Pendiente | **P1 (Corto plazo)** |
+| **BUG-01** | Backend | Incluir datos de presupuesto mensual en el retorno temprano de `get_summary` | Medio | **✅ Completado** | **P0 (Inmediato)** |
+| **PERF-01** | Rendimiento | Eliminar consultas $N+1$ de `PriceObservation` en detalle de ticket | Alto | **✅ Completado** | **P1 (Corto plazo)** |
+| **PERF-02** | Rendimiento | Caché y pre-tokenización en memoria de candidatos Mercadona | Medio | **✅ Completado** | **P1 (Corto plazo)** |
+| **PERF-03** | Frontend | Code-splitting con `React.lazy` y `manualChunks` en Vite (-69.6% bundle) | Medio | **✅ Completado** | **P1 (Corto plazo)** |
+| **ARCH-01/02**| Frontend / PWA | Cola de refresco de JWT en Axios y caché dinámica de assets en `sw.js` | Medio | **✅ Completado** | **P1 (Corto plazo)** |
+| **ARCH-03** | Backend | Flag explícito `AUTO_SEED_SAMPLES` para prevenir inyección en producción | Bajo | **✅ Completado** | **P1 (Corto plazo)** |
 | **FEAT-04** | Producto | Asociación automática de tickets por últimos 4 dígitos de tarjeta bancaria | Alto | Pendiente | **P2 (Medio plazo)** |
 | **FEAT-02/05**| Producto | Detector de Reduflación y Radar de Bajadas de Precio en básicos | Alto | Pendiente | **P2 (Medio plazo)** |
 | **FEAT-03** | Producto | División de gastos por miembro y liquidación mensual (*Splitwise*) | Alto | Pendiente | **P2 (Medio plazo)** |

@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:5173/integrations/google/callback"
 
+    # Data Seeding Control
+    AUTO_SEED_SAMPLES: bool = True
+
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         """Prevents starting in production mode with default/weak cryptographic secrets."""

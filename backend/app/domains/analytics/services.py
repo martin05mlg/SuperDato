@@ -29,10 +29,67 @@ CATEGORY_COLORS = {
 class AnalyticsService:
     @staticmethod
     async def _ensure_data(db: AsyncSession):
-        count_stmt = select(func.count(Receipt.id))
-        count = (await db.execute(count_stmt)).scalar_one()
-        if count == 0:
-            await ReceiptService.sync_sample_receipts_to_db(db)
+        from app.core.config import settings
+        if settings.AUTO_SEED_SAMPLES:
+            count_stmt = select(func.count(Receipt.id))
+            count = (await db.execute(count_stmt)).scalar_one()
+            if count == 0:
+                await ReceiptService.sync_sample_receipts_to_db(db)
+
+    @staticmethod
+    async def _compute_household_budget(db: AsyncSession, household_id: Optional[uuid.UUID]) -> Dict:
+        """Computes household monthly budget metrics and projections."""
+        monthly_budget = None
+        current_month_spend = None
+        budget_spent_pct = None
+        budget_remaining = None
+        projected_month_spend = None
+        days_in_month = None
+        current_day_of_month = None
+
+        if household_id:
+            from app.domains.households.models import Household
+            import calendar
+
+            hh = await db.get(Household, household_id)
+            if hh and hh.settings and "monthly_budget" in hh.settings:
+                try:
+                    b_val = float(hh.settings["monthly_budget"])
+                    if b_val > 0:
+                        monthly_budget = b_val
+                except (ValueError, TypeError):
+                    monthly_budget = None
+
+            today = date.today()
+            first_day_of_month = date(today.year, today.month, 1)
+            _, num_days = calendar.monthrange(today.year, today.month)
+            days_in_month = num_days
+            current_day_of_month = today.day
+
+            cur_month_stmt = select(func.coalesce(func.sum(Receipt.total_amount), 0.0)).where(
+                Receipt.household_id == household_id,
+                Receipt.assignment_status == "ASSIGNED",
+                Receipt.purchase_date >= first_day_of_month,
+                Receipt.purchase_date <= today,
+            )
+            current_month_spend = round(float((await db.execute(cur_month_stmt)).scalar_one() or 0.0), 2)
+
+            if monthly_budget:
+                budget_spent_pct = round((current_month_spend / monthly_budget) * 100, 1)
+                budget_remaining = round(monthly_budget - current_month_spend, 2)
+                if current_day_of_month > 0:
+                    daily_rate = current_month_spend / current_day_of_month
+                    projected_month_spend = round(daily_rate * days_in_month, 2)
+
+        return {
+            "monthly_budget": monthly_budget,
+            "current_month_spend": current_month_spend,
+            "budget_spent_pct": budget_spent_pct,
+            "budget_remaining": budget_remaining,
+            "projected_month_spend": projected_month_spend,
+            "days_in_month": days_in_month,
+            "current_day_of_month": current_day_of_month,
+        }
 
     @staticmethod
     async def get_summary(
@@ -62,7 +119,8 @@ class AnalyticsService:
         receipts = res.scalars().all()
 
         if not receipts:
-            # Fallback if filtered range has 0 receipts
+            # Fallback if filtered range has 0 receipts - preserves household budget metrics
+            budget_data = await AnalyticsService._compute_household_budget(db, household_id)
             return {
                 "total_spend": 0.0,
                 "previous_spend": 0.0,
@@ -74,6 +132,12 @@ class AnalyticsService:
                 "last_purchase_date": None,
                 "last_sync_at": "Al día",
                 "period_label": "Sin datos en el rango seleccionado",
+                "comparison_label": None,
+                "max_ticket_amount": None,
+                "min_ticket_amount": None,
+                "shopping_frequency_days": None,
+                "monthly_average_spend": None,
+                **budget_data,
             }
 
         total_spend = sum(float(r.total_amount) for r in receipts)
@@ -164,47 +228,7 @@ class AnalyticsService:
             comparison_label = None
 
         # 4. Household Monthly Budget & Projection
-        monthly_budget = None
-        current_month_spend = None
-        budget_spent_pct = None
-        budget_remaining = None
-        projected_month_spend = None
-        days_in_month = None
-        current_day_of_month = None
-
-        if household_id:
-            from app.domains.households.models import Household
-            import calendar
-
-            hh = await db.get(Household, household_id)
-            if hh and hh.settings and "monthly_budget" in hh.settings:
-                try:
-                    b_val = float(hh.settings["monthly_budget"])
-                    if b_val > 0:
-                        monthly_budget = b_val
-                except (ValueError, TypeError):
-                    monthly_budget = None
-
-            today = date.today()
-            first_day_of_month = date(today.year, today.month, 1)
-            _, num_days = calendar.monthrange(today.year, today.month)
-            days_in_month = num_days
-            current_day_of_month = today.day
-
-            cur_month_stmt = select(func.coalesce(func.sum(Receipt.total_amount), 0.0)).where(
-                Receipt.household_id == household_id,
-                Receipt.assignment_status == "ASSIGNED",
-                Receipt.purchase_date >= first_day_of_month,
-                Receipt.purchase_date <= today,
-            )
-            current_month_spend = round(float((await db.execute(cur_month_stmt)).scalar_one() or 0.0), 2)
-
-            if monthly_budget:
-                budget_spent_pct = round((current_month_spend / monthly_budget) * 100, 1)
-                budget_remaining = round(monthly_budget - current_month_spend, 2)
-                if current_day_of_month > 0:
-                    daily_rate = current_month_spend / current_day_of_month
-                    projected_month_spend = round(daily_rate * days_in_month, 2)
+        budget_data = await AnalyticsService._compute_household_budget(db, household_id)
 
         return {
             "total_spend": round(total_spend, 2),
@@ -222,13 +246,7 @@ class AnalyticsService:
             "min_ticket_amount": min_ticket,
             "shopping_frequency_days": shopping_frequency_days,
             "monthly_average_spend": monthly_average_spend,
-            "monthly_budget": monthly_budget,
-            "current_month_spend": current_month_spend,
-            "budget_spent_pct": budget_spent_pct,
-            "budget_remaining": budget_remaining,
-            "projected_month_spend": projected_month_spend,
-            "days_in_month": days_in_month,
-            "current_day_of_month": current_day_of_month,
+            **budget_data,
         }
 
     @staticmethod
