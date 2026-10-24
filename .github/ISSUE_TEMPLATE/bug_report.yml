@@ -1,0 +1,31 @@
+name: Bug Report
+description: Report a bug in SuperDato (parser, backend, frontend, or Docker setup)
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Privacy Warning**: Do **not** attach real Mercadona PDF receipts containing your store address, invoice code, or bank card digits (`****1234`). Redact personal fields first.
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: Clear and concise description of what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `docker compose up -d`
+        2. Upload receipt...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment (OS / Docker / Browser)
+      placeholder: "Ubuntu 24.04, Docker 27, Firefox 131"
+

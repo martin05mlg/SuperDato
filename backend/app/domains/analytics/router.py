@@ -1,0 +1,135 @@
+import uuid
+from datetime import date
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.domains.analytics.schemas import (
+    AnalyticsSummaryResponse,
+    CategoryDistributionResponse,
+    HouseholdHabitsResponse,
+    SpendingPointResponse,
+    TopProductResponse,
+)
+from app.domains.analytics.services import AnalyticsService
+from app.domains.auth.models import User
+from app.domains.households.models import HouseholdMembership
+from app.domains.households.permissions import get_current_user
+
+router = APIRouter(prefix="/analytics", tags=["Analytics"])
+
+
+async def verify_household_access(
+    household_id: Optional[uuid.UUID],
+    current_user: User,
+    db: AsyncSession,
+) -> None:
+    """Verifies that the authenticated user belongs to the requested household."""
+    if household_id and not current_user.is_superuser:
+        res = await db.execute(
+            select(HouseholdMembership).where(
+                HouseholdMembership.household_id == household_id,
+                HouseholdMembership.user_id == current_user.id,
+            )
+        )
+        if not res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: No perteneces a este hogar.",
+            )
+
+
+@router.get("/summary", response_model=AnalyticsSummaryResponse)
+async def get_analytics_summary(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por ID de hogar"),
+    start_date: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns aggregated KPIs: total spend, MoM variation, ticket count, average ticket, median, and last sync."""
+    await verify_household_access(household_id, current_user, db)
+    return await AnalyticsService.get_summary(
+        db=db,
+        household_id=household_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/category-distribution", response_model=List[CategoryDistributionResponse])
+async def get_category_distribution(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por ID de hogar"),
+    start_date: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns spend breakdown grouped by product category with percentage and colors."""
+    await verify_household_access(household_id, current_user, db)
+    return await AnalyticsService.get_category_distribution(
+        db=db,
+        household_id=household_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/spending-evolution", response_model=List[SpendingPointResponse])
+async def get_spending_evolution(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por ID de hogar"),
+    start_date: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns time series of daily spend for interactive charts."""
+    await verify_household_access(household_id, current_user, db)
+    return await AnalyticsService.get_spending_evolution(
+        db=db,
+        household_id=household_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/top-products", response_model=List[TopProductResponse])
+async def get_top_products(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por ID de hogar"),
+    start_date: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    limit: int = Query(10, ge=1, le=50, description="Número de productos a devolver"),
+    sort_by: str = Query("spend", description="Criterio de ordenación: 'spend' (gasto total) o 'purchases' (nº de compras) o 'quantity'"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns top ranked products by accumulated spend, units and purchase count."""
+    await verify_household_access(household_id, current_user, db)
+    return await AnalyticsService.get_top_products(
+        db=db,
+        household_id=household_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        sort_by=sort_by,
+    )
+
+
+@router.get("/habits", response_model=HouseholdHabitsResponse)
+async def get_shopping_habits(
+    household_id: Optional[uuid.UUID] = Query(None, description="Filtrar por ID de hogar"),
+    start_date: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns shopping habits: weekday distribution, top stores visited, and tax breakdown."""
+    await verify_household_access(household_id, current_user, db)
+    return await AnalyticsService.get_habits(
+        db=db,
+        household_id=household_id,
+        start_date=start_date,
+        end_date=end_date,
+    )

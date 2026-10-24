@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Node.js
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Environment variables & local secrets
+.env
+.env.local
+.env.*.local
+.secrets.json
+backend/data/
+
+# Databases and temporary files
+*.sqlite3
+*.sqlite
+*.db
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Real receipts protection (only allow synthetic samples in backend/samples/)
+/samples/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Legacy references
+izanamador_mercadata/
+
+# Internal documentation & design specs
+docs/
