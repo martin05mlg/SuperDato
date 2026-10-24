@@ -32,6 +32,8 @@ import {
   ChevronDown,
   Trash2,
   User,
+  ArrowRightLeft,
+  X,
 } from 'lucide-react';
 
 export const ReceiptsListPage: React.FC = () => {
@@ -56,6 +58,9 @@ export const ReceiptsListPage: React.FC = () => {
   const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
   const [bulkTargetHousehold, setBulkTargetHousehold] = useState<string>('');
   const [isBulkAssigning, setIsBulkAssigning] = useState(false);
+  const [quickMoveReceipt, setQuickMoveReceipt] = useState<Receipt | null>(null);
+  const [quickMoveTarget, setQuickMoveTarget] = useState<string>('');
+  const [isQuickMoving, setIsQuickMoving] = useState(false);
 
   // Fetch receipts scoped to active household
   const { data: receipts = [], isLoading: isLoadingReceipts } = useQuery<Receipt[]>({
@@ -74,6 +79,8 @@ export const ReceiptsListPage: React.FC = () => {
   const pendingCount = pendingReceipts.length;
 
   const handleTabChange = (tab: 'household' | 'pending') => {
+    setSelectedPendingIds([]);
+    setBulkTargetHousehold('');
     if (tab === 'pending') {
       setSearchParams({ tab: 'pending' });
     } else {
@@ -389,6 +396,48 @@ export const ReceiptsListPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Household Move Batch Action Bar */}
+      {currentTab === 'household' && households.length > 1 && selectedPendingIds.length > 0 && (
+        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center space-x-2 text-xs font-semibold text-purple-900">
+            <ArrowRightLeft className="w-4 h-4 text-purple-600" />
+            <span>{selectedPendingIds.length} tickets seleccionados para mover</span>
+          </div>
+
+          <div className="flex items-center space-x-2 w-full sm:w-auto">
+            <select
+              value={bulkTargetHousehold}
+              onChange={(e) => setBulkTargetHousehold(e.target.value)}
+              className="text-xs font-medium border border-purple-300 bg-white rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">Selecciona hogar destino...</option>
+              {households
+                .filter((h) => h.id !== activeHousehold?.id)
+                .map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}
+                  </option>
+                ))}
+              <option value="pending">Desasignar (Mover a Pendientes de Asignar)</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={handleBulkAssign}
+              disabled={isBulkAssigning || !bulkTargetHousehold}
+              className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center space-x-1"
+            >
+              {isBulkAssigning ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+              )}
+              <span>Mover en bloque</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Pending Batch Action Bar */}
       {currentTab === 'pending' && selectedPendingIds.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in">
@@ -457,7 +506,7 @@ export const ReceiptsListPage: React.FC = () => {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-xs uppercase tracking-wider">
                 <tr>
-                  {currentTab === 'pending' && (
+                  {(currentTab === 'pending' || households.length > 1) && (
                     <th className="py-3 px-3 w-10 text-center">
                       <input
                         type="checkbox"
@@ -472,7 +521,11 @@ export const ReceiptsListPage: React.FC = () => {
                             setSelectedPendingIds([]);
                           }
                         }}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        className={`rounded border-slate-300 ${
+                          currentTab === 'pending'
+                            ? 'text-amber-600 focus:ring-amber-500'
+                            : 'text-purple-600 focus:ring-purple-500'
+                        }`}
                       />
                     </th>
                   )}
@@ -490,7 +543,7 @@ export const ReceiptsListPage: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredReceipts.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/70 transition">
-                    {currentTab === 'pending' && (
+                    {(currentTab === 'pending' || households.length > 1) && (
                       <td className="py-3 px-3 text-center">
                         <input
                           type="checkbox"
@@ -502,7 +555,11 @@ export const ReceiptsListPage: React.FC = () => {
                               setSelectedPendingIds(selectedPendingIds.filter((id) => id !== r.id));
                             }
                           }}
-                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                          className={`rounded border-slate-300 ${
+                            currentTab === 'pending'
+                              ? 'text-amber-600 focus:ring-amber-500'
+                              : 'text-purple-600 focus:ring-purple-500'
+                          }`}
                         />
                       </td>
                     )}
@@ -591,6 +648,20 @@ export const ReceiptsListPage: React.FC = () => {
 
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center space-x-1.5">
+                        {households.length > 1 && currentTab === 'household' && (
+                          <button
+                            onClick={() => {
+                              setQuickMoveReceipt(r);
+                              setQuickMoveTarget('');
+                            }}
+                            className="inline-flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium px-2.5 py-1.5 rounded-lg text-xs transition border border-purple-200"
+                            title="Mover ticket a otro hogar"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Mover</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => handleViewDetail(r.id)}
                           disabled={loadingDetailId === r.id}
@@ -665,6 +736,95 @@ export const ReceiptsListPage: React.FC = () => {
             handleViewDetail(receiptId);
           }}
         />
+      )}
+
+      {/* Quick Move Single Receipt Modal */}
+      {quickMoveReceipt && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm">
+                <ArrowRightLeft className="w-4 h-4 text-purple-600" />
+                <span>Mover Ticket de Hogar</span>
+              </div>
+              <button
+                onClick={() => {
+                  setQuickMoveReceipt(null);
+                  setQuickMoveTarget('');
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 mb-4">
+              Vas a mover el ticket <strong>{quickMoveReceipt.invoice_number}</strong> por importe de{' '}
+              <strong>{quickMoveReceipt.total_amount.toFixed(2)} €</strong>.
+            </p>
+
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                Hogar de destino
+              </label>
+              <select
+                value={quickMoveTarget}
+                onChange={(e) => setQuickMoveTarget(e.target.value)}
+                className="w-full text-xs font-medium border border-slate-200 bg-white rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="">Selecciona el hogar destino...</option>
+                {households
+                  .filter((h) => h.id !== quickMoveReceipt.household_id)
+                  .map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                {quickMoveReceipt.household_id && (
+                  <option value="pending">Desasignar (Mover a Pendientes de Asignar)</option>
+                )}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickMoveReceipt(null);
+                  setQuickMoveTarget('');
+                }}
+                className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!quickMoveTarget || isQuickMoving}
+                onClick={async () => {
+                  if (!quickMoveReceipt || !quickMoveTarget) return;
+                  try {
+                    setIsQuickMoving(true);
+                    await receiptsApi.assignHousehold(quickMoveReceipt.id, quickMoveTarget);
+                    await queryClient.invalidateQueries({ queryKey: ['receipts'] });
+                    await queryClient.invalidateQueries({ queryKey: ['pending-receipts'] });
+                    await queryClient.invalidateQueries({ queryKey: ['pending-receipts-count'] });
+                    await queryClient.invalidateQueries({ queryKey: ['analytics'] });
+                    setQuickMoveReceipt(null);
+                    setQuickMoveTarget('');
+                  } catch (err: any) {
+                    alert(err.response?.data?.detail || 'Error al mover el ticket.');
+                  } finally {
+                    setIsQuickMoving(false);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition disabled:opacity-50 flex items-center space-x-1.5"
+              >
+                {isQuickMoving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRightLeft className="w-3.5 h-3.5" />}
+                <span>Mover Ticket</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal with Full Line Items and Taxes */}

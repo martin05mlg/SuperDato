@@ -150,16 +150,18 @@ async def bulk_assign_receipts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Assigns multiple pending receipts to a target household."""
-    try:
-        target_household_id = uuid.UUID(data.household_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ID de hogar no válido.",
-        )
+    """Assigns or moves multiple receipts to a target household or unassigns to pending."""
+    target_hh = data.household_id
+    if target_hh and str(target_hh).lower() not in ("pending", "unassigned", "none", ""):
+        try:
+            target_hh = str(uuid.UUID(str(target_hh)))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ID de hogar no válido.",
+            )
     return await ReceiptService.bulk_assign_household(
-        db, data.receipt_ids, target_household_id, current_user.id
+        db, data.receipt_ids, target_hh, current_user.id
     )
 
 
@@ -170,16 +172,18 @@ async def assign_receipt(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Assigns a pending receipt to a target household."""
-    try:
-        target_household_id = uuid.UUID(data.household_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ID de hogar no válido.",
-        )
+    """Assigns or moves a receipt to a target household or unassigns to pending."""
+    target_hh = data.household_id
+    if target_hh and str(target_hh).lower() not in ("pending", "unassigned", "none", ""):
+        try:
+            target_hh = str(uuid.UUID(str(target_hh)))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ID de hogar no válido.",
+            )
     return await ReceiptService.assign_household(
-        db, receipt_id, target_household_id, current_user.id
+        db, receipt_id, target_hh, current_user.id
     )
 
 

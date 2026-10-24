@@ -13,8 +13,11 @@ import {
   Package,
   Trash2,
   Loader2,
+  Home,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { receiptsApi } from '../../api/receipts.api';
+import { useHousehold } from '../../context/HouseholdContext';
 
 interface Props {
   receipt: Receipt | null;
@@ -40,6 +43,46 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const { households, activeHousehold } = useHousehold();
+  const [targetHouseholdId, setTargetHouseholdId] = useState<string>('');
+  const [isMoving, setIsMoving] = useState(false);
+  const [moveFeedback, setMoveFeedback] = useState<string | null>(null);
+
+  const currentHousehold = households.find((h) => h.id === currentReceipt?.household_id);
+
+  const handleMoveHousehold = async () => {
+    if (!currentReceipt || !targetHouseholdId) return;
+    try {
+      setIsMoving(true);
+      setMoveFeedback(null);
+      await receiptsApi.assignHousehold(currentReceipt.id, targetHouseholdId);
+
+      const targetName =
+        targetHouseholdId === 'pending'
+          ? 'Pendientes de asignar'
+          : households.find((h) => h.id === targetHouseholdId)?.name || 'otro hogar';
+
+      setMoveFeedback(`Ticket transferido con éxito a ${targetName}.`);
+
+      if (onReceiptDeleted && targetHouseholdId !== activeHousehold?.id) {
+        setTimeout(() => {
+          onReceiptDeleted(currentReceipt.id);
+          onClose();
+        }, 1200);
+      } else if (onReceiptUpdated) {
+        onReceiptUpdated({
+          ...currentReceipt,
+          household_id: targetHouseholdId === 'pending' ? undefined : targetHouseholdId,
+          assignment_status: targetHouseholdId === 'pending' ? 'PENDING_ASSIGNMENT' : 'ASSIGNED',
+        });
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al mover el ticket de hogar.');
+    } finally {
+      setIsMoving(false);
+    }
+  };
 
   // Sync internal state when prop changes
   React.useEffect(() => {
@@ -174,6 +217,55 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
             </span>
           </div>
         </div>
+
+        {/* Household Reassignment Box (Visible if multiple households exist) */}
+        {households.length > 1 && (
+          <div className="px-6 py-3 bg-purple-50/70 border-b border-purple-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                <Home className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span className="font-bold text-slate-800">Hogar asignado: </span>
+                <span className="font-semibold text-purple-700">
+                  {currentHousehold?.name || (currentReceipt.household_id ? 'Hogar asignado' : 'Pendiente de asignar')}
+                </span>
+                {moveFeedback && (
+                  <p className="text-emerald-600 font-medium text-[11px] animate-in fade-in">{moveFeedback}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <select
+                value={targetHouseholdId}
+                onChange={(e) => setTargetHouseholdId(e.target.value)}
+                className="text-xs font-medium border border-purple-200 bg-white rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-700"
+              >
+                <option value="">Mover ticket a...</option>
+                {households
+                  .filter((h) => h.id !== currentReceipt.household_id)
+                  .map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                {currentReceipt.household_id && (
+                  <option value="pending">Desasignar (Mover a Pendientes)</option>
+                )}
+              </select>
+              <button
+                type="button"
+                onClick={handleMoveHousehold}
+                disabled={isMoving || !targetHouseholdId}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-xs transition disabled:opacity-50 flex items-center space-x-1 shrink-0"
+              >
+                {isMoving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRightLeft className="w-3.5 h-3.5" />}
+                <span>Mover</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Line Items */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">

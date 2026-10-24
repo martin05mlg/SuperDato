@@ -1058,9 +1058,33 @@ class ReceiptService:
 
     @staticmethod
     async def assign_household(db: AsyncSession, receipt_id: str, household_id: Any, user_id: Any) -> Dict:
-        """Assigns an unassigned receipt to a target household."""
+        """Assigns or moves a receipt to a target household or unassigns it to pending."""
         from app.domains.households.models import HouseholdMembership
         u_uuid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        r_uuid = uuid.UUID(receipt_id) if isinstance(receipt_id, str) else receipt_id
+
+        r_stmt = select(Receipt).where(Receipt.id == r_uuid)
+        receipt = (await db.execute(r_stmt)).scalar_one_or_none()
+        if not receipt:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket no encontrado.")
+
+        # If unassigning to pending
+        if not household_id or str(household_id).lower() in ("pending", "unassigned", "none", ""):
+            receipt.household_id = None
+            receipt.assignment_status = "PENDING_ASSIGNMENT"
+
+            obs_stmt = (
+                select(PriceObservation)
+                .join(ReceiptLine, PriceObservation.receipt_line_id == ReceiptLine.id)
+                .where(ReceiptLine.receipt_id == receipt.id)
+            )
+            obs_res = await db.execute(obs_stmt)
+            for obs in obs_res.scalars().all():
+                obs.household_id = None
+
+            await db.commit()
+            return await ReceiptService.get_receipt_detail(db, str(receipt.id))
+
         h_uuid = uuid.UUID(str(household_id)) if not isinstance(household_id, uuid.UUID) else household_id
 
         mem_stmt = select(HouseholdMembership).where(
@@ -1074,13 +1098,7 @@ class ReceiptService:
                 detail="No perteneces al hogar seleccionado.",
             )
 
-        r_uuid = uuid.UUID(receipt_id) if isinstance(receipt_id, str) else receipt_id
-        r_stmt = select(Receipt).where(Receipt.id == r_uuid)
-        receipt = (await db.execute(r_stmt)).scalar_one_or_none()
-        if not receipt:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket no encontrado.")
-
-        receipt.household_id = household_id
+        receipt.household_id = h_uuid
         receipt.assignment_status = "ASSIGNED"
 
         # Update PriceObservations for lines in this receipt
@@ -1091,16 +1109,37 @@ class ReceiptService:
         )
         obs_res = await db.execute(obs_stmt)
         for obs in obs_res.scalars().all():
-            obs.household_id = household_id
+            obs.household_id = h_uuid
 
         await db.commit()
         return await ReceiptService.get_receipt_detail(db, str(receipt.id))
 
     @staticmethod
     async def bulk_assign_household(db: AsyncSession, receipt_ids: List[str], household_id: Any, user_id: Any) -> Dict:
-        """Assigns multiple unassigned receipts to a household in batch."""
+        """Assigns or moves multiple receipts to a household or to pending in batch."""
         from app.domains.households.models import HouseholdMembership
         u_uuid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        uuids = [uuid.UUID(rid) if isinstance(rid, str) else rid for rid in receipt_ids]
+
+        if not household_id or str(household_id).lower() in ("pending", "unassigned", "none", ""):
+            stmt = select(Receipt).where(Receipt.id.in_(uuids))
+            receipts = (await db.execute(stmt)).scalars().all()
+            for r in receipts:
+                r.household_id = None
+                r.assignment_status = "PENDING_ASSIGNMENT"
+
+            obs_stmt = (
+                select(PriceObservation)
+                .join(ReceiptLine, PriceObservation.receipt_line_id == ReceiptLine.id)
+                .where(ReceiptLine.receipt_id.in_(uuids))
+            )
+            obs_res = await db.execute(obs_stmt)
+            for obs in obs_res.scalars().all():
+                obs.household_id = None
+
+            await db.commit()
+            return {"assigned_count": len(receipts)}
+
         h_uuid = uuid.UUID(str(household_id)) if not isinstance(household_id, uuid.UUID) else household_id
 
         mem_stmt = select(HouseholdMembership).where(
@@ -1114,11 +1153,10 @@ class ReceiptService:
                 detail="No perteneces al hogar seleccionado.",
             )
 
-        uuids = [uuid.UUID(rid) if isinstance(rid, str) else rid for rid in receipt_ids]
         stmt = select(Receipt).where(Receipt.id.in_(uuids))
         receipts = (await db.execute(stmt)).scalars().all()
         for r in receipts:
-            r.household_id = household_id
+            r.household_id = h_uuid
             r.assignment_status = "ASSIGNED"
 
         obs_stmt = (
@@ -1128,7 +1166,7 @@ class ReceiptService:
         )
         obs_res = await db.execute(obs_stmt)
         for obs in obs_res.scalars().all():
-            obs.household_id = household_id
+            obs.household_id = h_uuid
 
         await db.commit()
         return {"assigned_count": len(receipts)}

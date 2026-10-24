@@ -72,6 +72,18 @@ async def _async_sync_connection(connection_id_str: str) -> Dict[str, Any]:
             job.messages_found = len(messages)
             await db.commit()
 
+            # Determine destination household & status based on user's household count
+            target_household_id = conn.household_id
+            target_assignment_status = "ASSIGNED"
+
+            if conn.user_id:
+                from app.domains.households.models import HouseholdMembership
+                hh_mems_stmt = select(HouseholdMembership).where(HouseholdMembership.user_id == conn.user_id)
+                mems = (await db.execute(hh_mems_stmt)).scalars().all()
+                if len(mems) > 1:
+                    target_household_id = None
+                    target_assignment_status = "PENDING_ASSIGNMENT"
+
             # 3. Process messages
             for msg in messages:
                 msg_id = msg.get("id")
@@ -87,9 +99,10 @@ async def _async_sync_connection(connection_id_str: str) -> Dict[str, Any]:
                     saved = await ReceiptService.save_extracted_receipt_to_db(
                         db=db,
                         extracted=extracted,
-                        household_id=conn.household_id,
+                        household_id=target_household_id,
                         import_job_id=job.id,
                         imported_by_user_id=conn.user_id,
+                        assignment_status=target_assignment_status,
                     )
                     if saved:
                         job.receipts_imported += 1
