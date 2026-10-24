@@ -33,21 +33,25 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickDemoLogin = async () => {
+  const handleQuickAdminLogin = async () => {
+    const defaultEmail = 'admin@superdato.com';
+    const defaultPassword = 'SuperDatoAdmin2026!';
+    setEmail(defaultEmail);
+    setPassword(defaultPassword);
     setError(null);
     setLoading(true);
 
     try {
       const response = await apiClient.post('/auth/login', {
-        email: 'dev@superdato.es',
-        password: 'superdato123',
+        email: defaultEmail,
+        password: defaultPassword,
       });
 
       const { access_token, refresh_token, user } = response.data;
       login(access_token, refresh_token, user);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al iniciar sesión con cuenta demo.');
+      setError(err.response?.data?.detail || 'Error al iniciar sesión con cuenta de superadministrador.');
     } finally {
       setLoading(false);
     }
@@ -75,6 +79,17 @@ export const LoginPage: React.FC = () => {
               <span>{error}</span>
             </div>
           )}
+
+          <div className="mb-5 bg-emerald-50/80 border border-emerald-200 rounded-xl p-3 text-emerald-900 text-xs space-y-1.5">
+            <div className="font-bold flex items-center space-x-1.5 text-emerald-800">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <span>Credenciales Superadministrador:</span>
+            </div>
+            <div className="font-mono text-xs text-slate-800 bg-white/90 p-2 rounded-lg border border-emerald-100 flex flex-col space-y-0.5">
+              <div><span className="text-slate-400">Usuario:</span> <span className="font-semibold select-all">admin@superdato.com</span></div>
+              <div><span className="text-slate-400">Clave:</span> <span className="font-semibold select-all">SuperDatoAdmin2026!</span></div>
+            </div>
+          </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
@@ -131,12 +146,12 @@ export const LoginPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={handleQuickDemoLogin}
+            onClick={handleQuickAdminLogin}
             disabled={loading}
             className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 transition disabled:opacity-50 shadow-2xs"
           >
             <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Acceso Demo (19 tickets precargados)</span>
+            <span>Acceso Rápido Superadministrador (1 clic)</span>
           </button>
 
           <div className="mt-6 text-center text-xs text-slate-500">

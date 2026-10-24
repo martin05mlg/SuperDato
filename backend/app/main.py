@@ -60,6 +60,10 @@ async def lifespan(app: FastAPI):
         if existing_user:
             existing_user.is_superuser = True
             existing_user.hashed_password = hash_password(settings.SUPERADMIN_PASSWORD)
+            existing_user.is_active = True
+            existing_user.is_verified = True
+            existing_user.failed_login_attempts = 0
+            existing_user.locked_until = None
             await session.commit()
         else:
             new_admin = User(
