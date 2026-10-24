@@ -4,6 +4,16 @@ import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
 import { ShoppingBag, Lock, Mail, User as UserIcon, AlertCircle, KeyRound } from 'lucide-react';
 
+const extractErrorMessage = (err: any, fallback: string): string => {
+  const detail = err.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => (d.msg ? String(d.msg).replace(/^Value error,\s*/i, '') : d.message || JSON.stringify(d))).join('. ');
+  }
+  if (detail && typeof detail === 'object') return detail.msg || detail.message || JSON.stringify(detail);
+  return err?.message || fallback;
+};
+
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -31,7 +41,7 @@ export const RegisterPage: React.FC = () => {
       login(access_token, refresh_token, user);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al registrar la cuenta.');
+      setError(extractErrorMessage(err, 'Error al registrar la cuenta.'));
     } finally {
       setLoading(false);
     }

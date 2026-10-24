@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base, TimestampMixin
 
@@ -52,6 +52,12 @@ class User(Base, TimestampMixin):
     locked_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
     )
 
     # Relationships

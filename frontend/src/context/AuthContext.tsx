@@ -7,6 +7,8 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  needsSetup: boolean;
+  checkSetupStatus: () => Promise<boolean>;
   login: (accessToken: string, refreshToken: string, userData: User) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -18,6 +20,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('access_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [needsSetup, setNeedsSetup] = useState<boolean>(false);
+
+  const checkSetupStatus = async (): Promise<boolean> => {
+    try {
+      const response = await apiClient.get<{ needs_setup: boolean }>('/auth/setup-status');
+      const isNeeded = !!response.data.needs_setup;
+      setNeedsSetup(isNeeded);
+      return isNeeded;
+    } catch {
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    checkSetupStatus();
+  }, []);
 
   const fetchCurrentUser = async () => {
     try {
@@ -46,6 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('refresh_token', refreshToken);
     setToken(accessToken);
     setUser(userData);
+    setNeedsSetup(false);
   };
 
   const logout = () => {
@@ -67,6 +86,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isAuthenticated: !!user,
         isLoading,
+        needsSetup,
+        checkSetupStatus,
         login,
         logout,
         refreshUser,

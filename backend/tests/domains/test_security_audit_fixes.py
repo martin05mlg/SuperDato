@@ -83,11 +83,11 @@ async def test_vuln02_cors_restricts_external_origins(client: AsyncClient):
     good_cors = await client.options(
         "/api/v1/auth/me",
         headers={
-            "Origin": "http://10.15.15.100:5173",
+            "Origin": "http://192.168.1.50:5173",
             "Access-Control-Request-Method": "GET",
         },
     )
-    assert good_cors.headers.get("access-control-allow-origin") == "http://10.15.15.100:5173"
+    assert good_cors.headers.get("access-control-allow-origin") == "http://192.168.1.50:5173"
 
 
 @pytest.mark.asyncio
@@ -290,4 +290,137 @@ def test_vuln08_production_secrets_validation():
             SECRET_KEY="a_very_strong_custom_production_secret_key_32_bytes_plus",
             ENCRYPTION_MASTER_KEY="01234567890123456789012345678901",
         )
+
+
+@pytest.mark.asyncio
+async def test_oss_readiness_password_policy_and_security_headers(client: AsyncClient):
+    """Weak or compromised default passwords like 'SuperDatoAdmin2026!' are rejected, and security headers are set."""
+    weak_res = await client.post("/api/v1/auth/register", json={
+        "email": "weak@ejemplo.com",
+        "password": "SuperDatoAdmin2026!",
+        "full_name": "Weak User",
+        "registration_token": "TEST-TOKEN-1234",
+    })
+    assert weak_res.status_code == 422
+    assert weak_res.headers.get("X-Content-Type-Options") == "nosniff"
+    assert weak_res.headers.get("X-Frame-Options") == "DENY"
+
+
+@pytest.mark.asyncio
+async def test_oss_readiness_gdpr_export_and_account_delete(client: AsyncClient):
+    """Users can export their personal data (GDPR Art. 20) and delete their account (GDPR Art. 17)."""
+    reg = await client.post("/api/v1/auth/register", json={
+        "email": "gdpr_user@ejemplo.com",
+        "password": "StrongGdprPassword123!",
+        "full_name": "GDPR User",
+        "registration_token": "TEST-TOKEN-1234",
+    })
+    assert reg.status_code == 201
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    # Export data
+    exp_res = await client.get("/api/v1/auth/me/export", headers=headers)
+    assert exp_res.status_code == 200
+    payload = exp_res.json()
+    assert payload["user"]["email"] == "gdpr_user@ejemplo.com"
+    assert len(payload["households"]) == 1
+
+    # Delete account with wrong password -> 401
+    bad_del = await client.post(
+        "/api/v1/auth/me/delete",
+        json={"current_password": "WrongPassword123!"},
+        headers=headers,
+    )
+    assert bad_del.status_code == 401
+
+    # Delete account with valid password -> 204
+    ok_del = await client.post(
+        "/api/v1/auth/me/delete",
+        json={"current_password": "StrongGdprPassword123!"},
+        headers=headers,
+    )
+    assert ok_del.status_code == 204
+
+    # Token no longer works
+    me_after = await client.get("/api/v1/auth/me", headers=headers)
+    assert me_after.status_code in (401, 404)
+
+
+@pytest.mark.asyncio
+async def test_oss_readiness_bootstrap_superadmin_does_not_overwrite_password(db_session: AsyncSession, monkeypatch):
+    """ensure_superadmin creates configured password on first boot and never overwrites on subsequent boots."""
+    from sqlalchemy import select
+    from app.core.bootstrap import ensure_superadmin
+
+    monkeypatch.setattr(settings, "SUPERADMIN_EMAIL", "root_boot@superdato.local")
+    monkeypatch.setattr(settings, "SUPERADMIN_PASSWORD", "InitialStrongAdminPass123!")
+
+    await ensure_superadmin(db_session)
+    res1 = await db_session.execute(select(User).where(User.email == "root_boot@superdato.local"))
+    admin1 = res1.scalar_one()
+    first_hash = admin1.hashed_password
+
+    # Simulate user changing password and restarting container
+    admin1.hashed_password = hash_password("CustomChangedAdminPass999!")
+    admin1.must_change_password = False
+    await db_session.commit()
+
+    await ensure_superadmin(db_session)
+    res2 = await db_session.execute(select(User).where(User.email == "root_boot@superdato.local"))
+    admin2 = res2.scalar_one()
+    assert admin2.hashed_password != first_hash
+    assert admin2.must_change_password is False
+
+
+@pytest.mark.asyncio
+async def test_first_run_web_setup_flow(client: AsyncClient, db_session: AsyncSession):
+    """Verifies First-Run Web Setup Wizard: status detection, admin creation, and lock after initial run."""
+    from sqlalchemy import delete
+    from app.domains.auth.models import RegistrationToken, User
+
+    # Ensure completely empty user table for setup test
+    await db_session.execute(delete(RegistrationToken))
+    await db_session.execute(delete(User))
+    await db_session.commit()
+
+    # 1. Setup status is true
+    status_res = await client.get("/api/v1/auth/setup-status")
+    assert status_res.status_code == 200
+    assert status_res.json()["needs_setup"] is True
+
+    # 2. Weak password rejected by policy
+    weak_res = await client.post("/api/v1/auth/setup-initial-admin", json={
+        "email": "owner@superdato.es",
+        "full_name": "Dueño de la Casa",
+        "password": "weak",
+    })
+    assert weak_res.status_code == 422
+
+    # 3. Successful First-Run Setup
+    setup_res = await client.post("/api/v1/auth/setup-initial-admin", json={
+        "email": "owner@superdato.es",
+        "full_name": "Dueño de la Casa",
+        "password": "MySuperAdminPass2026!#",
+    })
+    assert setup_res.status_code == 201
+    data = setup_res.json()
+    assert data["user"]["email"] == "owner@superdato.es"
+    assert data["user"]["is_superuser"] is True
+    assert "access_token" in data
+    assert "sd_refresh" in setup_res.cookies
+
+    # 4. Subsequent setup attempt is blocked (HTTP 409 Conflict)
+    duplicate_res = await client.post("/api/v1/auth/setup-initial-admin", json={
+        "email": "hacker@superdato.es",
+        "full_name": "Hacker",
+        "password": "AnotherStrongPassword123!",
+    })
+    assert duplicate_res.status_code == 409
+
+    # 5. Setup status is now false
+    status_after = await client.get("/api/v1/auth/setup-status")
+    assert status_after.status_code == 200
+    assert status_after.json()["needs_setup"] is False
+
+
 

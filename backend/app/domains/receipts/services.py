@@ -1,5 +1,6 @@
 import glob
 import io
+import logging
 import os
 import uuid
 from datetime import date, datetime, timezone
@@ -16,6 +17,17 @@ from app.domains.households.models import Household
 from app.domains.receipts.extractor.pdf_parser import PDFReceiptExtractor
 from app.domains.receipts.models import Receipt, ReceiptLine, ReceiptTaxLine
 
+logger = logging.getLogger(__name__)
+
+# Directorio con los tickets de ejemplo sintéticos (backend/samples), independiente del cwd
+_SAMPLES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "samples")
+
+
+def get_sample_pdf_paths() -> List[str]:
+    """Devuelve los PDFs sintéticos de ejemplo (nunca datos reales de usuarios)."""
+    return sorted(glob.glob(os.path.join(_SAMPLES_DIR, "*.pdf")))
+
+
 # In-memory storage cache synchronized with parsing engine for instant testing & responses
 _RECEIPTS_STORE: Dict[str, Dict] = {}
 _SAMPLES_LOADED_ONCE: bool = False
@@ -28,11 +40,7 @@ def load_initial_samples_if_empty():
         return
     _SAMPLES_LOADED_ONCE = True
 
-    sample_files = glob.glob("samples/*.pdf")
-    if not sample_files:
-        sample_files = glob.glob("../samples/*.pdf")
-
-    for pdf_path in sample_files:
+    for pdf_path in get_sample_pdf_paths():
         try:
             with open(pdf_path, "rb") as f:
                 extracted = PDFReceiptExtractor.extract_from_stream(f)
@@ -50,7 +58,7 @@ def load_initial_samples_if_empty():
 
                 _RECEIPTS_STORE[receipt_id] = extracted
         except Exception as e:
-            print(f"Error loading sample {pdf_path}: {e}")
+            logger.warning("Error loading sample %s: %s", pdf_path, e)
 
 
 class ReceiptService:
@@ -90,11 +98,7 @@ class ReceiptService:
             db.add(household)
             await db.flush()
 
-        sample_files = glob.glob("samples/*.pdf")
-        if not sample_files:
-            sample_files = glob.glob("../samples/*.pdf")
-
-        for pdf_path in sample_files:
+        for pdf_path in get_sample_pdf_paths():
             try:
                 with open(pdf_path, "rb") as f:
                     extracted = PDFReceiptExtractor.extract_from_stream(f)
@@ -205,7 +209,7 @@ class ReceiptService:
 
                     await db.commit()
             except Exception as e:
-                print(f"Error syncing {pdf_path} to DB: {e}")
+                logger.warning("Error syncing %s to DB: %s", pdf_path, e)
 
         # Permanently mark samples as seeded so deleting receipts never causes them to re-seed
         try:

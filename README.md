@@ -8,157 +8,130 @@
 [![PWA Ready](https://img.shields.io/badge/PWA-Ready-5A0FC8?logo=pwa&logoColor=white)](frontend/public/manifest.webmanifest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**SuperDato** es una plataforma web modular, autónoma y auto-alojable (*self-hosted*) para importar, organizar, auditar y analizar los tickets de compra digitales y en papel de **Mercadona**.
+**SuperDato** es una plataforma web modular, autónoma y auto-alojable (*self-hosted*) para importar, organizar, auditar y analizar tus propios tickets de compra digitales y en papel.
 
-Permite a familias, pisos compartidos y usuarios particulares monitorizar el gasto mensual del hogar, conciliar el desglose de IVA con precisión contable, comparar la evolución histórica de precios y disponer de un asistente de lista de la compra inteligente en el supermercado mediante una aplicación web progresiva (PWA).
+Permite a familias, pisos compartidos y usuarios particulares monitorizar el gasto mensual del hogar, conciliar el desglose de IVA con precisión contable, comparar la evolución histórica de precios (IPC personal) y disponer de un asistente de lista de la compra inteligente mediante una aplicación web progresiva (PWA).
+
+> [!IMPORTANT]
+> **Aviso Legal y de Marca**: *SuperDato es un proyecto de software libre e independiente con fines educativos y de gestión doméstica personal. No está afiliado, patrocinado, autorizado ni respaldado en modo alguno por Mercadona, S.A. Todas las marcas comerciales mencionadas pertenecen a sus respectivos propietarios.*
 
 ---
 
 ## ✨ Características Principales
 
-- 📥 **Sincronización Automática con Gmail**: Conexión nativa con Google OAuth 2.0 que busca y descarga periódicamente tus tickets oficiales de Mercadona (`from:mercadona.es`).
-- 🧾 **Asistente de Tickets Manuales**: Añade compras artículo por artículo con búsqueda predictiva y cálculo en tiempo real de importes, base imponible e IVA para compras físicas.
-- 🧮 **Conciliación Contable Estricta**: Verificación matemática exacta (0,00 € de discrepancia) entre líneas de artículos, base imponible, cuotas de IVA (4%, 10%, 21%) y total del ticket.
-- 📈 **Control de Inflación y Precios**: Detección automática de subidas y bajadas de precio por producto con historial temporal y variaciones porcentuales.
-- 🏬 **Catálogo Normalizado con Mercadona Online**: Enriquecimiento automático de artículos con fotos oficiales en alta resolución, marcas (Hacendado, Bosque Verde, etc.) y formato de envase mediante integración con la tienda online.
-- 🛡️ **Aislamiento Multi-Hogar y Seguridad**: Control de acceso granular RBAC (*Owner*, *Admin*, *Member*), cifrado simétrico AES-128-CBC + HMAC-SHA256 para tokens OAuth y contraseñas con Argon2id.
-- 📱 **PWA Móvil Offline**: Instalable en iPhone y Android con Service Worker optimizado para modo supermercado en zonas sin cobertura.
-- ⚙️ **Panel de Superadministración Integrado**: Gestión visual de usuarios, hogares, tokens de registro cerrado y configuración de Google OAuth en 1 clic.
+- 📥 **Sincronización Automática con Gmail**: Conexión nativa con Google OAuth 2.0 (`gmail.readonly`) que busca y descarga periódicamente tus tickets digitales.
+- 🧾 **Motor Determinista de Tickets PDF y Manuales**: Extracción local de líneas de productos, pesos variables, tarifas de IVA (4%, 10%, 21%) y deduplicación criptográfica SHA-256.
+- 🧮 **Conciliación Contable Estricta**: Verificación matemática entre líneas de artículos, base imponible, cuotas de IVA y total del ticket.
+- 📈 **Control de Inflación Personal (IPC Personal)**: Seguimiento histórico de subidas y bajadas de precio por producto y categoría.
+- 🛡️ **Aislamiento Multi-Hogar y Seguridad de Producción**: Control de acceso RBAC (*Owner*, *Admin*, *Member*, *Viewer*), cifrado en reposo **AES-256-GCM** para tokens OAuth, contraseñas **Argon2id**, cookies `HttpOnly` y limitación de tasa (*rate limiting*).
+- 📱 **PWA Móvil**: Instalable en móvil y escritorio.
+- ⚙️ **Panel de Superadministración (`/admin`)**: Gestión visual de invitaciones de un solo uso, usuarios, tickets de demostración y configuración dinámica de Google OAuth y URL pública del servidor sin editar archivos `.env`.
 
 ---
 
-## 🚀 Despliegue Rápido con Docker (Zero-Configuration)
+## 🚀 Despliegue Rápido con Docker (Zero-Config)
 
-El proyecto está diseñado para arrancar inmediatamente con un solo comando sin requerir configuraciones complejas ni edición obligatoria de variables de entorno:
+El proyecto está diseñado para arrancar con un solo comando sin necesidad de crear ni copiar archivos `.env`:
 
-### 1. Clonar el repositorio
 ```bash
 git clone https://github.com/tu-usuario/SuperDato-MercadonaTicketTracker.git
 cd SuperDato-MercadonaTicketTracker
-```
-
-### 2. Levantar los contenedores (¡Listo para usar!)
-```bash
 docker compose up -d
 ```
 
+En el primer arranque, SuperDato:
+1. Genera automáticamente claves criptográficas seguras (`SECRET_KEY` y `ENCRYPTION_MASTER_KEY`) y las persiste con permisos `0600` en el volumen `app_data` (`/app/data/.secrets.json`).
+2. Ejecuta automáticamente las migraciones de base de datos con **Alembic** (`alembic upgrade head`).
+3. Te espera en la web para configurar el Administrador mediante el **First-Run Web Setup Wizard**.
+
+### 🔑 Configuración del Superadministrador (First-Run Web Setup)
+
+Abre **[http://localhost:5173](http://localhost:5173)** en tu navegador. SuperDato detectará automáticamente el primer arranque y te recibirá con el asistente de configuración inicial:
+- Configuras tu nombre, email y **la contraseña que tú elijas** directamente desde la web.
+- **Sin necesidad de consultar logs de terminal ni copiar claves temporales.**
+- Una vez creado, el asistente se desactiva permanentemente y los registros posteriores quedan cerrados por invitación.
+
 > [!TIP]
-> **Zero-Configuración**: No necesitas crear ni editar manualmente un archivo `.env`.
-> El sistema genera de forma autónoma claves criptográficas seguras (`SECRET_KEY` de 64 caracteres y `ENCRYPTION_MASTER_KEY` de 32 caracteres), las almacena en un volumen persistente compartido (`app_data`), configura la base de datos y arranca todos los contenedores en modo seguro.
-> *(Opcional: si deseas personalizar puertos, contraseñas de Postgres o dominios, puedes copiar `.env.example` a `.env` y ajustarlo).*
+> **Modo Desatendido (Opcional)**: Si despliegas con herramientas automáticas (Ansible, Portainer, Kubernetes) y prefieres preconfigurar el administrador sin pasar por la web, puedes definir `SUPERADMIN_PASSWORD` en tu `.env`.
 
-En unos segundos tendrás todos los servicios funcionando:
-- 🌐 **Aplicación Web**: [http://localhost:5173](http://localhost:5173)
-- 📑 **Documentación OpenAPI / Swagger**: [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)
-- 🩺 **Endpoint de Salud**: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
+Si en algún momento olvidas tu contraseña o la cuenta se bloquea por intentos fallidos, puedes restablecerla cómodamente por CLI:
 
----
-
-## 🔑 Acceso Inicial y Superadministrador
-
-En el primer arranque en limpio, el sistema genera automáticamente el usuario **Superadministrador** con los datos configurados en tu archivo `.env`:
-
-| Parámetro | Valor por Defecto |
-| :--- | :--- |
-| **Email** | `admin@superdato.com` |
-| **Contraseña** | `SuperDatoAdmin2026!` *(o la que definas en `SUPERADMIN_PASSWORD`)* |
-| **Rol** | `Superuser` (Acceso total al panel de administración en `/admin`) |
-| **Token para invitar al primer miembro** | `SUPERDATO-INIT-2026` (1 único uso para registro seguro; tokens posteriores se generan en el panel de administración) |
-
-> [!NOTE]
-> Cualquier usuario que se registre como el primer usuario de una base de datos limpia obtiene automáticamente permisos de Superadministrador.
-
----
-
-## ⚙️ Configuración de Google OAuth en 2 Minutos
-
-No necesitas reiniciar los contenedores para activar la sincronización con Gmail. Puedes configurarlo directamente desde la interfaz web:
-
-1. Inicia sesión con la cuenta de superadministrador y pulsa en **Panel de Administración** (o accede a [http://localhost:5173/admin](http://localhost:5173/admin)).
-2. Entra en la pestaña **"Google OAuth & Servidor"**.
-3. Revisa la **URL Pública del Servidor** (ej. `http://localhost:5173` o tu dominio público `https://superdato.midominio.com`).
-4. La **URI de redireccionamiento autorizada** se calculará automáticamente (ej. `http://localhost:5173/integrations/google/callback`). Pulsa el botón **Copiar URI**.
-5. Abre [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
-   - Habilita la **Gmail API**.
-   - En *Pantalla de consentimiento OAuth*, añade el scope `https://www.googleapis.com/auth/gmail.readonly`.
-   - En *Credenciales*, crea un **ID de cliente de OAuth** (tipo *Aplicación Web*) y pega la URI copiada en **URIs de redireccionamiento autorizados**.
-6. Copia el **ID de cliente** y el **Secreto de cliente** y pégalos en el panel de SuperDato. Pulsa **Guardar Configuración**.
-7. ¡Ya puedes vincular cualquier cuenta de Gmail desde la pestaña *Importar* de tu hogar!
-
----
-
-## 💻 Desarrollo Local (Sin Docker)
-
-Si prefieres ejecutar el proyecto directamente en tu máquina:
-
-### Requisitos Previos
-- Python 3.12 o superior.
-- Node.js 20 o superior y npm.
-
-### Backend (FastAPI)
 ```bash
-# Crear y activar entorno virtual
-python -m venv .venv
+docker compose exec api python scripts/reset_admin.py
+```
 
+---
+
+## ⚙️ Configuración de Google OAuth desde la Web
+
+Puedes configurar las credenciales de Google OAuth y la dirección pública de tu servidor directamente desde el navegador sin tocar variables de entorno:
+
+1. Inicia sesión con la cuenta de superadministrador y abre el **Panel de Administración** (`/admin`).
+2. Entra en la pestaña **"Google OAuth & Servidor"**.
+3. Define la **URL Pública del Servidor** (ej. `http://localhost:5173` o `https://superdato.midominio.com`).
+4. Copia la **URI de redireccionamiento autorizada** generada automáticamente (`<SERVER_PUBLIC_URL>/integrations/google/callback`) y regístrala en [Google Cloud Console](https://console.cloud.google.com/apis/credentials) con el scope `https://www.googleapis.com/auth/gmail.readonly`.
+5. Pega el **Client ID** y el **Client Secret** en el panel y pulsa **Guardar Configuración**.
+
+> [!TIP]
+> También puedes eliminar en 1 clic los tickets sintéticos de muestra desde el Panel de Administración cuando empieces a subir tus propios tickets.
+
+---
+
+## 🌐 Despliegue en Producción con HTTPS y Backups
+
+### Reverse Proxy (HTTPS)
+Para exponer SuperDato fuera de `localhost`, colócalo detrás de un proxy inverso con TLS (por ejemplo **Caddy**):
+
+```caddyfile
+superdato.midominio.com {
+    reverse_proxy localhost:5173
+}
+```
+
+Después, actualiza la **URL Pública del Servidor** en `/admin` a `https://superdato.midominio.com`.
+
+### Copias de Seguridad (Backups)
+Para respaldar toda tu instancia necesitas conservar únicamente dos elementos:
+1. **Base de datos PostgreSQL**:
+   ```bash
+   docker compose exec -T db pg_dump -U superdato superdato_db > backup_superdato.sql
+   ```
+2. **Archivo de claves criptográficas (`/app/data/.secrets.json`)** en el volumen `app_data`:
+   ```bash
+   docker compose cp api:/app/data/.secrets.json ./secrets_backup.json
+   ```
+
+---
+
+## 💻 Desarrollo Local y Tests
+
+```bash
+python -m venv .venv
 # Windows PowerShell:
 .\.venv\Scripts\Activate.ps1
 # Linux / macOS:
 source .venv/bin/activate
 
-# Instalar dependencias
-pip install -r backend/requirements.txt
-
-# Ejecutar tests
-pytest backend/tests -v
-
-# Arrancar backend en modo desarrollo (utiliza SQLite local automáticamente)
-$env:DATABASE_URL="sqlite+aiosqlite:///./superdato_dev.db"  # Windows
-export DATABASE_URL="sqlite+aiosqlite:///./superdato_dev.db" # Linux/macOS
-python -m uvicorn app.main:app --app-dir backend --reload --port 8000
+pip install -r backend/requirements-dev.txt
+$env:PYTHONPATH="backend"; pytest -q
 ```
 
-### Frontend (React + Vite)
+Para regenerar los tickets PDF sintéticos de prueba (nunca subas tickets reales al repositorio):
+
 ```bash
-cd frontend
-npm install
-npm run dev
-```
-La aplicación web estará disponible en [http://localhost:5173](http://localhost:5173).
-
----
-
-## 🏗️ Arquitectura del Stack Docker
-
-```mermaid
-flowchart TD
-    Browser["🌐 Navegador Web / PWA Móvil"]
-    Nginx["🐳 superdato_web (Nginx :5173)"]
-    API["🐳 superdato_api (FastAPI :8000)"]
-    DB[("🐳 superdato_postgres (PostgreSQL 16)")]
-    Redis[("🐳 superdato_redis (Redis 7)")]
-    Worker["🐳 superdato_worker (Celery Worker)"]
-    Beat["🐳 superdato_beat (Celery Beat)"]
-
-    Browser -->|HTTP / SPA / PWA Assets| Nginx
-    Nginx -->|Proxy /api/| API
-    API -->|Async SQLAlchemy| DB
-    API -->|Task Dispatch / Cache| Redis
-    Worker -->|Process Imports & Sync| Redis
-    Worker -->|Save Receipts & Products| DB
-    Beat -->|Periodic Sync Schedule| Redis
+python backend/scripts/generate_sample_receipts.py
 ```
 
 ---
 
-## 🔒 Privacidad y Seguridad
+## 🔒 Privacidad, RGPD y Seguridad
 
-- **Tokens OAuth Cifrados**: Los refresh tokens de Google se cifran con Fernet (AES-128-CBC + HMAC-SHA256) antes de almacenarse en la base de datos.
-- **Acceso Estricto a Gmail**: La aplicación solo solicita el permiso de lectura estricto `gmail.readonly` y filtra exclusivamente correos que contengan adjuntos PDF procedentes de `@mercadona.es`.
-- **Aislamiento Multi-Tenant**: Ningún usuario u hogar puede visualizar tickets, importes o compras de otro hogar mediante comprobaciones anti-IDOR en base de datos.
-- **Contraseñas Seguras**: Hasheadas mediante el algoritmo de última generación **Argon2id** con detección de fuerza bruta y bloqueo automático temporal tras 5 intentos fallidos.
+- **Cifrado Autenticado**: Tokens OAuth cifrados en reposo mediante **AES-256-GCM** con clave derivada por HKDF-SHA256.
+- **Derechos RGPD Integrados**: Exportación completa de datos en JSON (`GET /api/v1/auth/me/export`) y eliminación completa de cuenta (`POST /api/v1/auth/me/delete`). Consulta [PRIVACY.md](PRIVACY.md) y [SECURITY.md](SECURITY.md).
 
 ---
 
 ## 📄 Licencia
 
-Distribuido bajo la licencia **MIT**. Consulta el archivo `LICENSE` para más información.
+Distribuido bajo la licencia **MIT**. Consulta el archivo [LICENSE](LICENSE) para más información.
+

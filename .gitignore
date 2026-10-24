@@ -15,18 +15,26 @@ dist/
 dist-ssr/
 *.local
 
-# Environment variables
+# Environment variables & local secrets
 .env
 .env.local
 .env.*.local
+.secrets.json
+backend/data/
 
 # Databases and temporary files
 *.sqlite3
+*.sqlite
 *.db
 *.log
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
+
+# Real receipts protection (only allow synthetic samples in backend/samples/)
+/samples/
 
 # Editor directories and files
 .vscode/
@@ -41,4 +49,5 @@ Thumbs.db
 # Legacy references
 izanamador_mercadata/
 
-
+# Internal documentation & design specs
+docs/

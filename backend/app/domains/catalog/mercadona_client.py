@@ -33,7 +33,7 @@ POSTAL_CODE_WAREHOUSE_MAP: Dict[str, str] = {
 DEFAULT_WAREHOUSE = "zar1"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "User-Agent": "SuperDato/0.1.0 (+https://github.com/superdato/superdato; self-hosted)",
     "Accept": "application/json",
     "Accept-Language": "es-ES,es;q=0.9",
 }
@@ -302,8 +302,8 @@ class MercadonaStorefrontClient:
                     total_upserted += 1
 
                 await db.commit()
-                # Friendly pause to be polite with Mercadona CDN/API
-                await asyncio.sleep(0.02)
+                # Friendly pause to avoid saturating third-party CDN/API
+                await asyncio.sleep(0.25)
 
             except Exception as e:
                 logger.warning(f"Error syncing subcategory {sub_id} ({sub_info['name']}): {e}")

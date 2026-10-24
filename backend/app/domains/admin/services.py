@@ -116,6 +116,7 @@ class AdminService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
 
         user.hashed_password = hash_password(new_password)
+        user.must_change_password = True
         user.failed_login_attempts = 0
         user.locked_until = None
         await db.commit()

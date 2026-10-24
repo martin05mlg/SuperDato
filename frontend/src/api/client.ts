@@ -14,6 +14,7 @@ const API_BASE_URL = getApiBaseUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -81,39 +82,33 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       const refreshToken = localStorage.getItem('refresh_token');
-      if (refreshToken) {
-        try {
-          const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-          const newAccessToken = res.data.access_token;
-          const newRefreshToken = res.data.refresh_token;
+      try {
+        const res = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          refreshToken ? { refresh_token: refreshToken } : {},
+          { withCredentials: true }
+        );
+        const newAccessToken = res.data.access_token;
+        const newRefreshToken = res.data.refresh_token;
 
-          localStorage.setItem('access_token', newAccessToken);
-          if (newRefreshToken) {
-            localStorage.setItem('refresh_token', newRefreshToken);
-          }
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-
-          processQueue(null, newAccessToken);
-          return apiClient(originalRequest);
-        } catch (refreshErr) {
-          processQueue(refreshErr, null);
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-            window.location.href = '/login';
-          }
-          return Promise.reject(refreshErr);
-        } finally {
-          isRefreshing = false;
+        localStorage.setItem('access_token', newAccessToken);
+        if (newRefreshToken) {
+          localStorage.setItem('refresh_token', newRefreshToken);
         }
-      } else {
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+
+        processQueue(null, newAccessToken);
+        return apiClient(originalRequest);
+      } catch (refreshErr) {
+        processQueue(refreshErr, null);
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
           window.location.href = '/login';
         }
+        return Promise.reject(refreshErr);
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);

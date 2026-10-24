@@ -1,12 +1,14 @@
-import uuid
+import logging
+import re
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status
+
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+
 from app.core.config import settings
-from app.core.database import engine, Base, async_session_maker
-from app.domains.auth.models import RegistrationToken
+from app.core.database import engine, async_session_maker
 
 # Import all domain models so SQLAlchemy Base registers their table definitions
 import app.domains.admin.models
@@ -17,97 +19,40 @@ import app.domains.catalog.models
 import app.domains.receipts.models
 import app.domains.shopping.models
 
+logging.basicConfig(
+    level=logging.DEBUG if settings.DEBUG else logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Ensure all database tables exist
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Startup: aplicar migraciones de esquema (Alembic) y garantizar el superadministrador
+    if settings.AUTO_MIGRATE:
+        from app.core.migrate import run_migrations
 
-    # Bootstrap initial registration token & superadmin if needed
+        await run_migrations()
+
     async with async_session_maker() as session:
-        has_tokens = (await session.execute(select(RegistrationToken))).scalars().first()
-        if not has_tokens:
-            bootstrap_token = RegistrationToken(
-                id=uuid.uuid4(),
-                token="SUPERDATO-INIT-2026",
-                note="Token inicial de bienvenida para el primer administrador",
-                max_uses=1,
-                times_used=0,
-                is_active=True,
-            )
-            session.add(bootstrap_token)
-            await session.commit()
-        else:
-            # Enforce single-use constraint on initial bootstrap token if it was previously initialized with 50 uses
-            init_token = (
-                await session.execute(
-                    select(RegistrationToken).where(RegistrationToken.token == "SUPERDATO-INIT-2026")
-                )
-            ).scalar_one_or_none()
-            if init_token and init_token.max_uses > 1:
-                init_token.max_uses = 1
-                if init_token.times_used >= 1:
-                    init_token.is_active = False
-                await session.commit()
+        from app.core.bootstrap import ensure_superadmin
 
-        # Ensure superadmin user exists and is up-to-date with compose configuration
-        from app.domains.auth.models import User
-        from app.domains.households.models import Household, HouseholdMembership
-        from app.core.security import hash_password
-
-        existing_user = (await session.execute(select(User).where(User.email == settings.SUPERADMIN_EMAIL.lower().strip()))).scalar_one_or_none()
-        if existing_user:
-            existing_user.is_superuser = True
-            existing_user.hashed_password = hash_password(settings.SUPERADMIN_PASSWORD)
-            existing_user.is_active = True
-            existing_user.is_verified = True
-            existing_user.failed_login_attempts = 0
-            existing_user.locked_until = None
-            await session.commit()
-        else:
-            new_admin = User(
-                id=uuid.uuid4(),
-                email=settings.SUPERADMIN_EMAIL.lower().strip(),
-                hashed_password=hash_password(settings.SUPERADMIN_PASSWORD),
-                full_name="Superadministrador",
-                is_active=True,
-                is_verified=True,
-                is_superuser=True,
-            )
-            session.add(new_admin)
-            await session.flush()
-
-            hh = Household(
-                id=uuid.uuid4(),
-                name=f"Hogar de {new_admin.full_name}",
-                currency="EUR",
-                created_by_user_id=new_admin.id,
-            )
-            session.add(hh)
-            await session.flush()
-
-            membership = HouseholdMembership(
-                id=uuid.uuid4(),
-                household_id=hh.id,
-                user_id=new_admin.id,
-                role="OWNER",
-            )
-            session.add(membership)
-            await session.commit()
+        await ensure_superadmin(session)
 
     yield
     # Shutdown: Cleanly dispose of connection pools
     await engine.dispose()
 
 
+# Swagger/OpenAPI: siempre disponible en desarrollo; en producción solo con ENABLE_DOCS=true
+_docs_enabled = settings.ENVIRONMENT.lower() != "production" or settings.ENABLE_DOCS
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="API REST de SuperDato para gestión, importación y analítica de tickets digitales de Mercadona.",
-    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
-    docs_url=f"{settings.API_V1_PREFIX}/docs",
-    redoc_url=f"{settings.API_V1_PREFIX}/redoc",
+    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json" if _docs_enabled else None,
+    docs_url=f"{settings.API_V1_PREFIX}/docs" if _docs_enabled else None,
+    redoc_url=f"{settings.API_V1_PREFIX}/redoc" if _docs_enabled else None,
     lifespan=lifespan,
 )
 
@@ -126,6 +71,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """Cabeceras de seguridad básicas en las respuestas de la API."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Convierte errores de validación de Pydantic en mensajes de texto legibles sin estructuras anidadas."""
+    errors = []
+    for err in exc.errors():
+        msg = err.get("msg", "Error de validación")
+        msg = re.sub(r"^Value error,\s*", "", msg, flags=re.IGNORECASE)
+        loc = err.get("loc", [])
+        field = loc[-1] if loc else ""
+        if field and field not in ("__root__", "body"):
+            errors.append(f"{field}: {msg}")
+        else:
+            errors.append(msg)
+    detail_msg = ". ".join(errors)
+    logging.getLogger("superdato.validation").warning("Error 422 en %s: %s", request.url.path, detail_msg)
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": detail_msg},
+    )
+
 
 # Domain Routers
 from app.domains.auth.router import router as auth_router
@@ -149,12 +127,14 @@ app.include_router(shopping_router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/", tags=["Root"])
 async def root():
-    """Welcome endpoint providing basic API info and interactive documentation link."""
-    return {
+    """Welcome endpoint providing basic API info."""
+    payload = {
         "message": f"Bienvenido a {settings.APP_NAME} API",
-        "docs": f"{settings.API_V1_PREFIX}/docs",
         "version": settings.APP_VERSION,
     }
+    if _docs_enabled:
+        payload["docs"] = f"{settings.API_V1_PREFIX}/docs"
+    return payload
 
 
 @app.get("/health", tags=["Health"])
@@ -166,3 +146,4 @@ async def health_check():
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
     }
+

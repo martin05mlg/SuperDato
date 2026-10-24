@@ -36,6 +36,9 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def init_test_db():
+    from app.core.ratelimit import reset_rate_limits
+    reset_rate_limits()
+
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     

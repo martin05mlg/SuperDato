@@ -36,6 +36,9 @@ const LoginPage = React.lazy(() =>
 const RegisterPage = React.lazy(() =>
   import('./pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage }))
 );
+const SetupWizardPage = React.lazy(() =>
+  import('./pages/auth/SetupWizardPage').then((m) => ({ default: m.SetupWizardPage }))
+);
 
 const PageLoader: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -52,12 +55,16 @@ const queryClient = new QueryClient({
   },
 });
 
-// Guard component that redirects to /login if not authenticated
+// Guard component that redirects to /setup if initial setup is pending, or /login if not authenticated
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, needsSetup } = useAuth();
 
   if (isLoading) {
     return <PageLoader />;
+  }
+
+  if (needsSetup) {
+    return <Navigate to="/setup" replace />;
   }
 
   if (!isAuthenticated) {
@@ -65,6 +72,27 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   return <>{children}</>;
+};
+
+// Route for Login/Register: redirects to /setup if setup is pending, or / if already authenticated
+const PublicAuthRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { needsSetup, isAuthenticated } = useAuth();
+  if (needsSetup) {
+    return <Navigate to="/setup" replace />;
+  }
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
+// Route for First-Run Web Setup Wizard
+const SetupRoute: React.FC = () => {
+  const { needsSetup, isAuthenticated } = useAuth();
+  if (!needsSetup) {
+    return <Navigate to={isAuthenticated ? '/' : '/login'} replace />;
+  }
+  return <SetupWizardPage />;
 };
 
 export const App: React.FC = () => {
@@ -75,9 +103,26 @@ export const App: React.FC = () => {
           <BrowserRouter>
             <Suspense fallback={<PageLoader />}>
               <Routes>
+                {/* First-Run Web Setup Wizard */}
+                <Route path="/setup" element={<SetupRoute />} />
+
                 {/* Public Auth Routes */}
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
+                <Route
+                  path="/login"
+                  element={
+                    <PublicAuthRoute>
+                      <LoginPage />
+                    </PublicAuthRoute>
+                  }
+                />
+                <Route
+                  path="/register"
+                  element={
+                    <PublicAuthRoute>
+                      <RegisterPage />
+                    </PublicAuthRoute>
+                  }
+                />
                 <Route path="/integrations/google/callback" element={<GoogleCallbackPage />} />
 
                 {/* Protected App Routes */}

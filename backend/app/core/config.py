@@ -56,9 +56,14 @@ def _load_or_create_secrets() -> Tuple[str, str]:
     }
     try:
         temp_file = data_dir / f".secrets.tmp.{os.getpid()}"
-        with open(temp_file, "w", encoding="utf-8") as f:
+        fd = os.open(temp_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
         os.replace(temp_file, secrets_file)
+        try:
+            os.chmod(secrets_file, 0o600)
+        except OSError:
+            pass
     except Exception:
         if secrets_file.exists():
             try:
@@ -85,16 +90,20 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
 
-    # CORS
+    # CORS (el origen de SERVER_PUBLIC_URL se añade automáticamente; usa CORS_EXTRA_ORIGINS para más)
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
-        "http://10.15.15.100:5173",
-        "http://10.15.15.100:3000",
-        "http://10.15.15.100:8000",
     ]
+    CORS_EXTRA_ORIGINS: List[str] = []
+
+    # Operación y exposición
+    ENABLE_DOCS: bool = False  # Swagger/OpenAPI: siempre activo fuera de producción; en producción solo si True
+    RATE_LIMIT_ENABLED: bool = True
+    AUTO_MIGRATE: bool = True  # Ejecuta `alembic upgrade head` al arrancar la API
+    ENABLE_MERCADONA_ONLINE: bool = False  # Enriquecimiento opt-in vía tienda.mercadona.es (API no oficial)
 
     # Database
     # Default to local postgresql+asyncpg, or sqlite+aiosqlite for local tests without postgres
@@ -133,7 +142,8 @@ class Settings(BaseSettings):
     # Server Public URL & Superadmin Defaults
     SERVER_PUBLIC_URL: str = "http://localhost:5173"
     SUPERADMIN_EMAIL: str = "admin@superdato.com"
-    SUPERADMIN_PASSWORD: str = "SuperDatoAdmin2026!"
+    # Vacío => se genera una contraseña aleatoria en el primer arranque y se muestra UNA vez en los logs.
+    SUPERADMIN_PASSWORD: str = ""
 
     # Data Seeding Control
     AUTO_SEED_SAMPLES: bool = True
@@ -168,6 +178,13 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Seguridad crítica: En entorno de producción debes configurar una ENCRYPTION_MASTER_KEY única de al menos 32 caracteres (o dejarlo vacío para auto-generación segura)."
                 )
+        # 3. Orígenes CORS: incluir el origen público configurado y los extra
+        origins = list(self.BACKEND_CORS_ORIGINS)
+        for candidate in [self.SERVER_PUBLIC_URL, *self.CORS_EXTRA_ORIGINS]:
+            candidate = (candidate or "").strip().rstrip("/")
+            if candidate and candidate not in origins:
+                origins.append(candidate)
+        self.BACKEND_CORS_ORIGINS = origins
         return self
 
 

@@ -1,10 +1,12 @@
 import uuid
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit
 from app.core.database import get_db
+from app.core.password_policy import MIN_PASSWORD_LENGTH, validate_password_strength
 from app.domains.admin.services import AdminService
 from app.domains.auth.models import User
 from app.domains.auth.schemas import RegistrationTokenCreate, RegistrationTokenResponse, UserResponse
@@ -14,7 +16,12 @@ router = APIRouter(prefix="/admin", tags=["Superadmin"])
 
 
 class ResetPasswordRequest(BaseModel):
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def check_password_policy(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 class UpdateUserRequest(BaseModel):
@@ -57,6 +64,7 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
 ):
     """Updates user state (active, superuser, name)."""
+    audit("admin_update_user", actor=current_admin, target=str(user_id), fields=",".join(data.model_dump(exclude_unset=True).keys()))
     return await AdminService.update_user(db, user_id, data.model_dump(exclude_unset=True))
 
 
@@ -68,6 +76,7 @@ async def reset_user_password(
     db: AsyncSession = Depends(get_db),
 ):
     """Resets a user's password directly."""
+    audit("admin_reset_password", actor=current_admin, target=str(user_id))
     return await AdminService.reset_user_password(db, user_id, data.new_password)
 
 
@@ -78,6 +87,7 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
 ):
     """Deletes a user from the platform."""
+    audit("admin_delete_user", actor=current_admin, target=str(user_id))
     return await AdminService.delete_user(db, user_id, current_admin.id)
 
 
@@ -111,6 +121,7 @@ async def delete_household(
     db: AsyncSession = Depends(get_db),
 ):
     """Deletes a household and cascades members and lines."""
+    audit("admin_delete_household", actor=current_admin, target=str(household_id))
     return await AdminService.delete_household(db, household_id)
 
 
@@ -153,6 +164,7 @@ async def revoke_registration_token(
     db: AsyncSession = Depends(get_db),
 ):
     """Revokes an active registration token."""
+    audit("admin_revoke_token", actor=current_admin, target=str(token_id))
     return await AdminService.revoke_registration_token(db, token_id)
 
 
@@ -181,6 +193,7 @@ async def update_system_settings(
     db: AsyncSession = Depends(get_db),
 ):
     """Updates dynamic system settings (Google Client ID/Secret, Server URL)."""
+    audit("admin_update_settings", actor=current_admin, fields=",".join(data.model_dump(exclude_unset=True).keys()))
     return await AdminService.update_system_settings(db, data.model_dump(exclude_unset=True))
 
 

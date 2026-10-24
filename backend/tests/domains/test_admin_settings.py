@@ -14,7 +14,7 @@ async def test_admin_settings_oauth_and_redirect_uri(client: AsyncClient, db_ses
     # 1. Register superadmin user matching SUPERADMIN_EMAIL
     reg_res = await client.post("/api/v1/auth/register", json={
         "email": settings.SUPERADMIN_EMAIL,
-        "password": "SuperDatoAdmin2026!",
+        "password": "StrongAdminPass2026!#",
         "full_name": "Root Admin",
         "registration_token": "TEST-TOKEN-1234",
     })

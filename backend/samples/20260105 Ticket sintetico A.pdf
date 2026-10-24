@@ -1,0 +1,66 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1052 >>
+stream
+BT
+/F1 9 Tf
+11 TL
+30 800 Td
+(MERCADONA, S.A.   A-46103834) Tj T*
+(AV DE LA MUESTRA 10) Tj T*
+(28001 MADRID) Tj T*
+(TELÉFONO: 900000001) Tj T*
+(05/01/2026 11:20  OP: 1000001) Tj T*
+(FACTURA SIMPLIFICADA: 9999-001-100001) Tj T*
+(Cnt. Descripción P. Unit Importe) Tj T*
+(1 LECHE ENTERA EJEMPLO 0,89) Tj T*
+(2 PAN DE BARRA EJEMPLO 0,45 0,90) Tj T*
+(1 PIZZA DEMO QUESOS 3,50) Tj T*
+(1 YOGUR NATURAL PACK 1,65) Tj T*
+(1 ARROZ REDONDO 1KG 1,20) Tj T*
+(1 DETERGENTE LIQUIDO 5,90) Tj T*
+(1 PAPEL HIGIENICO 12U 3,25) Tj T*
+(1 MANZANA GOLDEN) Tj T*
+(0,820 kg 2,10 €/kg 1,72) Tj T*
+(1 TOMATE RAMA) Tj T*
+(0,515 kg 2,95 €/kg 1,52) Tj T*
+(TOTAL \(€\) 20,53) Tj T*
+(TARJETA BANCARIA 20,53) Tj T*
+(IVA BASE IMP. \(€\) CUOTA \(€\) TOTAL \(€\)) Tj T*
+(4% 4,84 0,19 5,03) Tj T*
+(10% 5,77 0,58 6,35) Tj T*
+(21% 7,56 1,59 9,15) Tj T*
+(TOTAL 18,17 2,36 20,53) Tj T*
+(TARJ. BANCARIA:  **** **** **** 0000) Tj T*
+(AUT: 000000 ARC: 00 AID: A0000000000000) Tj T*
+(Verificado por dispositivo) Tj T*
+(Importe: 20,53 € Visa) Tj T*
+(TICKET SINTETICO DE EJEMPLO - SIN VALOR) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001345 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1440
+%%EOF
