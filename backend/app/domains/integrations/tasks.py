@@ -121,15 +121,17 @@ async def _async_sync_connection(connection_id_str: str) -> Dict[str, Any]:
             }
 
         except Exception as e:
+            err_msg = str(e).strip() if str(e).strip() else f"{type(e).__name__}: {repr(e)}"
+            logger.exception("Error executing sync for connection %s: %s", connection_id_str, err_msg)
             job.status = "FAILED"
             job.completed_at = datetime.now(timezone.utc)
-            job.error_details.append({"general_error": str(e)})
+            job.error_details.append({"general_error": err_msg})
             conn.sync_status = "ERROR"
-            conn.last_error = str(e)
+            conn.last_error = err_msg
             await db.commit()
             return {
                 "job_id": str(job.id),
-                "error": str(e),
+                "error": err_msg,
                 "messages_found": 0,
                 "imported": 0,
                 "skipped": 0,

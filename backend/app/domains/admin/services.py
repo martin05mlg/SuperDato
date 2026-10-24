@@ -331,13 +331,18 @@ class AdminService:
             try:
                 decrypted = decrypt_secret(raw_secret)
                 secret_to_mask = decrypted
+                if len(secret_to_mask) > 6:
+                    masked = "••••••••••••" + secret_to_mask[-4:]
+                else:
+                    masked = "••••••••••••"
             except Exception:
-                secret_to_mask = raw_secret
-
-            if len(secret_to_mask) > 6:
-                masked = "••••••••••••" + secret_to_mask[-4:]
-            else:
-                masked = "••••••••••••"
+                # Decryption failed (e.g. master key changed)
+                if raw_secret.startswith("gAAAAA"):
+                    masked = ""
+                    google_client_secret_set = False
+                else:
+                    secret_to_mask = raw_secret
+                    masked = "••••••••••••" + (secret_to_mask[-4:] if len(secret_to_mask) > 6 else "")
         else:
             masked = ""
 
@@ -425,6 +430,12 @@ class AdminService:
                 try:
                     client_secret = decrypt_secret(raw_secret)
                 except Exception:
+                    if raw_secret.startswith("gAAAAA"):
+                        raise ValueError(
+                            "No se pudo descifrar el Client Secret de Google almacenado porque la clave maestra "
+                            "(ENCRYPTION_MASTER_KEY) ha cambiado o no coincide. "
+                            "Por favor, ve a Administración > Ajustes y vuelve a introducir tu Client Secret."
+                        )
                     client_secret = raw_secret
 
             if settings_map.get("server_public_url"):

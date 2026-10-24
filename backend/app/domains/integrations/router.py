@@ -310,10 +310,13 @@ async def trigger_manual_sync(
         job_id = uuid.UUID(sync_result["job_id"])
         job = await db.get(ImportJob, job_id)
         if job:
-            if job.status == "FAILED" and "error" in sync_result:
+            if job.status == "FAILED":
+                err_msg = sync_result.get("error") or (
+                    job.error_details[-1].get("general_error") if job.error_details else "Error durante la sincronización."
+                )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Fallo en la sincronización: {sync_result['error']}",
+                    detail=f"Fallo en la sincronización: {err_msg}",
                 )
             return job
 

@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from app.core.config import settings
 
 # Argon2 password hasher
@@ -102,5 +102,11 @@ def encrypt_secret(plain_text: str) -> str:
 def decrypt_secret(encrypted_text: str) -> str:
     """Decrypts text previously encrypted with encrypt_secret."""
     f = _get_fernet()
-    return f.decrypt(encrypted_text.encode("utf-8")).decode("utf-8")
+    try:
+        return f.decrypt(encrypted_text.encode("utf-8")).decode("utf-8")
+    except InvalidToken:
+        raise ValueError(
+            "Error de descifrado: la clave maestra (ENCRYPTION_MASTER_KEY) es inválida o ha cambiado. "
+            "Reintroduce las credenciales en el panel de administración o vuelve a vincular la cuenta."
+        )
 
