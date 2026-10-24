@@ -34,8 +34,8 @@ Permite a familias, pisos compartidos y usuarios particulares monitorizar el gas
 El proyecto está diseñado para arrancar con un solo comando sin necesidad de crear ni copiar archivos `.env`:
 
 ```bash
-git clone https://github.com/tu-usuario/SuperDato-MercadonaTicketTracker.git
-cd SuperDato-MercadonaTicketTracker
+git clone https://github.com/martin05mlg/SuperDato.git
+cd SuperDato
 docker compose up -d
 ```
 
