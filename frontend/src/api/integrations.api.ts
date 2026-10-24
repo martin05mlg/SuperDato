@@ -3,6 +3,8 @@ import { apiClient } from './client';
 export interface GoogleConnection {
   id: string;
   user_id: string;
+  user_email?: string | null;
+  user_full_name?: string | null;
   household_id: string;
   google_email: string;
   scopes: string[];
@@ -43,6 +45,13 @@ export const integrationsApi = {
     return res.data;
   },
 
+  getGoogleConnections: async (householdId: string): Promise<GoogleConnection[]> => {
+    const res = await apiClient.get<GoogleConnection[]>(
+      `/integrations/google/connections?household_id=${householdId}`
+    );
+    return res.data;
+  },
+
   connectMockGoogle: async (householdId: string, email?: string): Promise<GoogleConnection> => {
     const res = await apiClient.post<GoogleConnection>(
       `/integrations/google/connect-mock?household_id=${householdId}&email=${encodeURIComponent(
@@ -52,14 +61,18 @@ export const integrationsApi = {
     return res.data;
   },
 
-  disconnectGoogle: async (householdId: string): Promise<void> => {
-    await apiClient.post(`/integrations/google/disconnect?household_id=${householdId}`);
+  disconnectGoogle: async (householdId: string, connectionId?: string): Promise<void> => {
+    const url = connectionId
+      ? `/integrations/google/disconnect?household_id=${householdId}&connection_id=${connectionId}`
+      : `/integrations/google/disconnect?household_id=${householdId}`;
+    await apiClient.post(url);
   },
 
-  triggerSync: async (householdId: string): Promise<ImportJobItem> => {
-    const res = await apiClient.post<ImportJobItem>(
-      `/integrations/sync?household_id=${householdId}`
-    );
+  triggerSync: async (householdId: string, connectionId?: string): Promise<ImportJobItem> => {
+    const url = connectionId
+      ? `/integrations/sync?household_id=${householdId}&connection_id=${connectionId}`
+      : `/integrations/sync?household_id=${householdId}`;
+    const res = await apiClient.post<ImportJobItem>(url);
     return res.data;
   },
 

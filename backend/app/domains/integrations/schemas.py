@@ -21,6 +21,8 @@ class GoogleConnectionResponse(BaseModel):
     sync_status: str
     last_error: Optional[str] = None
     created_at: datetime
+    user_email: Optional[str] = None
+    user_full_name: Optional[str] = None
 
 
 class ImportJobResponse(BaseModel):
@@ -42,4 +44,5 @@ class ImportJobResponse(BaseModel):
 
 class TriggerSyncRequest(BaseModel):
     household_id: Optional[uuid.UUID] = None
+    connection_id: Optional[uuid.UUID] = None
 

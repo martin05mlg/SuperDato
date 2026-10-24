@@ -132,6 +132,11 @@ class Receipt(Base, TimestampMixin):
     )
 
     # Relationships
+    imported_by_user: Mapped[Optional["User"]] = relationship(
+        "app.domains.auth.models.User",
+        foreign_keys=[imported_by_user_id],
+        lazy="selectin",
+    )
     lines: Mapped[List["ReceiptLine"]] = relationship(
         "ReceiptLine",
         back_populates="receipt",

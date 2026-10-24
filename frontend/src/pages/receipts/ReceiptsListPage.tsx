@@ -31,6 +31,7 @@ import {
   FileJson,
   ChevronDown,
   Trash2,
+  User,
 } from 'lucide-react';
 
 export const ReceiptsListPage: React.FC = () => {
@@ -514,6 +515,12 @@ export const ReceiptsListPage: React.FC = () => {
                         />
                         <span>{r.invoice_number}</span>
                       </div>
+                      {r.imported_by_name && (
+                        <div className="flex items-center space-x-1 text-[11px] text-slate-500 font-normal mt-0.5">
+                          <User className="w-3 h-3 text-slate-400" />
+                          <span>{r.imported_by_name}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-slate-600 text-xs">
                       <div className="flex items-center space-x-1.5">

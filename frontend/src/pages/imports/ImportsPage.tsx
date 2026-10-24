@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
-import { integrationsApi } from '../../api/integrations.api';
+import { integrationsApi, type GoogleConnection } from '../../api/integrations.api';
 import {
   RefreshCw,
   Mail,
@@ -14,10 +15,13 @@ import {
   X,
   ExternalLink,
   Sparkles,
+  User as UserIcon,
+  Plus,
 } from 'lucide-react';
 
 export const ImportsPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { activeHousehold } = useHousehold();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
@@ -26,9 +30,10 @@ export const ImportsPage: React.FC = () => {
   const [connectingMock, setConnectingMock] = useState(false);
 
   // Queries
-  const { data: googleConn, isLoading: loadingConn } = useQuery({
-    queryKey: ['googleStatus', activeHousehold?.id],
-    queryFn: () => (activeHousehold ? integrationsApi.getGoogleStatus(activeHousehold.id) : Promise.resolve(null)),
+  const { data: googleConnections = [], isLoading: loadingConn } = useQuery<GoogleConnection[]>({
+    queryKey: ['googleConnections', activeHousehold?.id],
+    queryFn: () =>
+      activeHousehold ? integrationsApi.getGoogleConnections(activeHousehold.id) : Promise.resolve([]),
     enabled: !!activeHousehold,
   });
 
@@ -53,9 +58,10 @@ export const ImportsPage: React.FC = () => {
     try {
       setConnectingMock(true);
       await integrationsApi.connectMockGoogle(activeHousehold.id, mockEmail);
+      queryClient.invalidateQueries({ queryKey: ['googleConnections', activeHousehold.id] });
       queryClient.invalidateQueries({ queryKey: ['googleStatus', activeHousehold.id] });
       setIsConnectModalOpen(false);
-      setSyncFeedback(`Cuenta ${mockEmail} vinculada con éxito.`);
+      setSyncFeedback(`Cuenta ${mockEmail} vinculada con éxito al hogar.`);
     } catch {
       alert('Error al simular la conexión de Google.');
     } finally {
@@ -63,28 +69,34 @@ export const ImportsPage: React.FC = () => {
     }
   };
 
-  const handleDisconnectGoogle = async () => {
+  const handleDisconnectGoogle = async (connectionId?: string, email?: string) => {
     if (!activeHousehold) return;
-    if (!confirm('¿Deseas desconectar tu cuenta de Google y revocar el acceso?')) return;
+    const confirmMsg = email
+      ? `¿Deseas desconectar la cuenta ${email} de este hogar?`
+      : '¿Deseas desconectar tu cuenta de Google y revocar el acceso?';
+    if (!confirm(confirmMsg)) return;
+
     try {
-      await integrationsApi.disconnectGoogle(activeHousehold.id);
+      await integrationsApi.disconnectGoogle(activeHousehold.id, connectionId);
+      queryClient.invalidateQueries({ queryKey: ['googleConnections', activeHousehold.id] });
       queryClient.invalidateQueries({ queryKey: ['googleStatus', activeHousehold.id] });
       setSyncFeedback('Cuenta de Google desconectada.');
-    } catch {
-      alert('Error al desconectar la cuenta.');
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || 'Error al desconectar la cuenta.');
     }
   };
 
-  const handleManualSync = async () => {
+  const handleManualSync = async (connectionId?: string) => {
     if (!activeHousehold) return;
     try {
       setIsSyncing(true);
       setSyncFeedback(null);
-      const job = await integrationsApi.triggerSync(activeHousehold.id);
+      const job = await integrationsApi.triggerSync(activeHousehold.id, connectionId);
       setSyncFeedback(
         `Sincronización completada: ${job.receipts_imported} tickets nuevos importados, ${job.receipts_skipped} duplicados omitidos.`
       );
       queryClient.invalidateQueries({ queryKey: ['importJobs', activeHousehold.id] });
+      queryClient.invalidateQueries({ queryKey: ['googleConnections', activeHousehold.id] });
       queryClient.invalidateQueries({ queryKey: ['receipts'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
     } catch {
@@ -101,17 +113,17 @@ export const ImportsPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Monitor de Importaciones</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Supervisa las sincronizaciones de Gmail, historial de escaneos y prevención de duplicados.
+            Supervisa las sincronizaciones de Gmail, historial de escaneos y prevención de duplicados por hogar y usuario.
           </p>
         </div>
 
         <button
-          onClick={handleManualSync}
+          onClick={() => handleManualSync()}
           disabled={isSyncing}
           className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-xl text-sm shadow-sm transition disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Ahora'}</span>
+          <span>{isSyncing ? 'Sincronizando Todo...' : 'Sincronizar Todas'}</span>
         </button>
       </div>
 
@@ -127,53 +139,95 @@ export const ImportsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Google Integration Status Card */}
+      {/* Google Integration Multi-User Accounts Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-          <Mail className="w-5 h-5 text-emerald-600" />
-          <span>Conexión con Google Gmail</span>
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <Mail className="w-5 h-5 text-emerald-600" />
+              <span>Cuentas de Correo Vinculadas al Hogar</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Cada miembro del hogar puede vincular su propio correo para que sus tickets de compra se sincronicen automáticamente.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setIsConnectModalOpen(true)}
+            className="inline-flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white font-medium px-3.5 py-2 rounded-xl text-xs transition self-start sm:self-auto shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Vincular Cuenta de Google</span>
+          </button>
+        </div>
 
         {loadingConn ? (
           <div className="py-4 text-xs text-slate-400 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-            <span>Consultando estado de conexión...</span>
+            <span>Consultando cuentas vinculadas...</span>
           </div>
-        ) : googleConn ? (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
-            <div className="space-y-1">
-              <div className="flex items-center space-x-2">
-                <span className="font-semibold text-slate-800 text-sm">{googleConn.google_email}</span>
-                <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Conectado (Tokens AES-256)</span>
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Última sincronización: {googleConn.last_sync_at ? googleConn.last_sync_at.replace('T', ' ') : 'Recién vinculado'}
-              </p>
-            </div>
+        ) : googleConnections.length > 0 ? (
+          <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
+            {googleConnections.map((conn) => {
+              const isOwnAccount = user?.id === conn.user_id;
+              return (
+                <div
+                  key={conn.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 bg-slate-50/50 hover:bg-slate-50 transition"
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-800 text-sm">{conn.google_email}</span>
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        <span>AES-256</span>
+                      </span>
+                      {conn.user_full_name && (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200/80 text-slate-700">
+                          <UserIcon className="w-3 h-3 text-slate-500" />
+                          <span>
+                            {conn.user_full_name} {isOwnAccount ? '(Tú)' : ''}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                      <span>
+                        Última sincronización:{' '}
+                        {conn.last_sync_at
+                          ? conn.last_sync_at.replace('T', ' ').substring(0, 19)
+                          : 'Pendiente de escaneo'}
+                      </span>
+                      {conn.sync_status === 'ERROR' && conn.last_error && (
+                        <span className="text-rose-600 font-medium">Error: {conn.last_error}</span>
+                      )}
+                    </div>
+                  </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleManualSync}
-                disabled={isSyncing}
-                className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition"
-              >
-                Escanear Correos
-              </button>
-              <button
-                onClick={handleDisconnectGoogle}
-                className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition"
-              >
-                Desconectar Cuenta
-              </button>
-            </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      onClick={() => handleManualSync(conn.id)}
+                      disabled={isSyncing}
+                      className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-lg transition disabled:opacity-50"
+                    >
+                      Escanear
+                    </button>
+                    <button
+                      onClick={() => handleDisconnectGoogle(conn.id, conn.google_email)}
+                      className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg transition"
+                      title="Desconectar esta cuenta del hogar"
+                    >
+                      Desconectar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/40">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-slate-700">No hay cuenta de Gmail conectada a este hogar</p>
+              <p className="text-sm font-semibold text-slate-700">No hay cuentas de Gmail conectadas a este hogar</p>
               <p className="text-xs text-slate-500">
                 Conecta tu cuenta para detectar y extraer automáticamente los tickets digitales que recibes de Mercadona.
               </p>
@@ -181,10 +235,10 @@ export const ImportsPage: React.FC = () => {
 
             <button
               onClick={() => setIsConnectModalOpen(true)}
-              className="inline-flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-2 rounded-xl text-sm transition"
+              className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2 rounded-xl text-xs transition shrink-0"
             >
-              <Mail className="w-4 h-4 text-emerald-400" />
-              <span>Conectar con Google</span>
+              <Mail className="w-4 h-4 text-emerald-200" />
+              <span>Conectar mi Gmail</span>
             </button>
           </div>
         )}

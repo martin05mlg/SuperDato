@@ -11,7 +11,7 @@ class GoogleAccountConnection(Base, TimestampMixin):
     """Google OAuth 2.0 account connection linked to a user and household."""
     __tablename__ = "google_account_connections"
     __table_args__ = (
-        UniqueConstraint("user_id", "google_email", name="uq_user_google_email"),
+        UniqueConstraint("household_id", "google_email", name="uq_household_google_email"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -68,11 +68,24 @@ class GoogleAccountConnection(Base, TimestampMixin):
     )
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship(
+        "app.domains.auth.models.User",
+        foreign_keys=[user_id],
+        lazy="selectin",
+    )
     import_jobs: Mapped[List["ImportJob"]] = relationship(
         "ImportJob",
         back_populates="connection",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def user_email(self) -> Optional[str]:
+        return self.user.email if self.user else None
+
+    @property
+    def user_full_name(self) -> Optional[str]:
+        return self.user.full_name if self.user else None
 
 
 class ImportJob(Base):

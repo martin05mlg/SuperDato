@@ -106,9 +106,10 @@ async def google_oauth_callback(
 
     encrypted_payload = encrypt_secret(json.dumps(tokens))
 
-    # Check if connection already exists
+    # Check if connection for this specific google_email already exists in this household
     query = select(GoogleAccountConnection).where(
-        GoogleAccountConnection.household_id == household_id
+        GoogleAccountConnection.household_id == household_id,
+        GoogleAccountConnection.google_email == google_email,
     )
     result = await db.execute(query)
     conn = result.scalar_one_or_none()
@@ -126,6 +127,7 @@ async def google_oauth_callback(
         )
         db.add(conn)
     else:
+        conn.user_id = user_id
         conn.google_email = google_email
         conn.encrypted_tokens = encrypted_payload
         conn.sync_status = "IDLE"
@@ -136,18 +138,48 @@ async def google_oauth_callback(
     return conn
 
 
-@router.get("/google/status", response_model=Optional[GoogleConnectionResponse])
-async def get_google_connection_status(
+@router.get("/google/connections", response_model=List[GoogleConnectionResponse])
+async def list_google_connections(
     household_id: uuid.UUID = Query(...),
     membership: HouseholdMembership = Depends(require_household_permission(Permission.VIEW_ANALYTICS)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns the current connection status of Gmail for this household."""
-    query = select(GoogleAccountConnection).where(
-        GoogleAccountConnection.household_id == household_id
+    """Returns all connected Gmail accounts for this household (multi-user support)."""
+    query = (
+        select(GoogleAccountConnection)
+        .where(GoogleAccountConnection.household_id == household_id)
+        .order_by(GoogleAccountConnection.created_at.asc())
     )
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    return result.scalars().all()
+
+
+@router.get("/google/status", response_model=Optional[GoogleConnectionResponse])
+async def get_google_connection_status(
+    household_id: uuid.UUID = Query(...),
+    current_user: User = Depends(get_current_user),
+    membership: HouseholdMembership = Depends(require_household_permission(Permission.VIEW_ANALYTICS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns the current user's connection status, or the primary connection for this household."""
+    # First prefer connection belonging to the active user
+    query_user = select(GoogleAccountConnection).where(
+        GoogleAccountConnection.household_id == household_id,
+        GoogleAccountConnection.user_id == current_user.id,
+    )
+    res_user = await db.execute(query_user)
+    conn = res_user.scalar_one_or_none()
+    if conn:
+        return conn
+
+    # Fallback to the first available connection in the household
+    query_any = (
+        select(GoogleAccountConnection)
+        .where(GoogleAccountConnection.household_id == household_id)
+        .order_by(GoogleAccountConnection.created_at.asc())
+    )
+    res_any = await db.execute(query_any)
+    return res_any.scalars().first()
 
 
 @router.post("/google/connect-mock", response_model=GoogleConnectionResponse)
@@ -165,7 +197,10 @@ async def connect_mock_google_account(
             detail="El endpoint de simulación OAuth está deshabilitado en producción.",
         )
 
-    stmt = select(GoogleAccountConnection).where(GoogleAccountConnection.household_id == household_id)
+    stmt = select(GoogleAccountConnection).where(
+        GoogleAccountConnection.household_id == household_id,
+        GoogleAccountConnection.google_email == email,
+    )
     res = await db.execute(stmt)
     conn = res.scalar_one_or_none()
 
@@ -185,7 +220,9 @@ async def connect_mock_google_account(
         )
         db.add(conn)
     else:
+        conn.user_id = current_user.id
         conn.google_email = email
+        conn.encrypted_tokens = encrypted
         conn.sync_status = "IDLE"
         conn.last_error = None
 
@@ -197,45 +234,101 @@ async def connect_mock_google_account(
 @router.post("/google/disconnect", status_code=status.HTTP_204_NO_CONTENT)
 async def disconnect_google_account(
     household_id: uuid.UUID = Query(...),
+    connection_id: Optional[uuid.UUID] = Query(None),
+    current_user: User = Depends(get_current_user),
     membership: HouseholdMembership = Depends(require_household_permission(Permission.CONNECT_INTEGRATIONS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Revokes tokens with Google and disconnects the account from this household."""
-    query = select(GoogleAccountConnection).where(
-        GoogleAccountConnection.household_id == household_id
-    )
-    result = await db.execute(query)
-    conn = result.scalar_one_or_none()
+    if connection_id:
+        query = select(GoogleAccountConnection).where(
+            GoogleAccountConnection.id == connection_id,
+            GoogleAccountConnection.household_id == household_id,
+        )
+        result = await db.execute(query)
+        conn = result.scalar_one_or_none()
+        if not conn:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conexión no encontrada.")
 
-    if conn:
+        # If not superuser or household OWNER/ADMIN, can only disconnect own account
+        if not current_user.is_superuser and membership.role not in [Role.OWNER.value, Role.ADMIN.value]:
+            if conn.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="No tienes permiso para desconectar la cuenta de otro miembro.",
+                )
+
         try:
             await GoogleOAuthClient.revoke_tokens(conn.encrypted_tokens)
         except Exception:
             pass
         await db.delete(conn)
         await db.commit()
+    else:
+        # Disconnect either the user's connection or all connections if owner/admin
+        query = select(GoogleAccountConnection).where(
+            GoogleAccountConnection.household_id == household_id,
+        )
+        if not current_user.is_superuser and membership.role not in [Role.OWNER.value, Role.ADMIN.value]:
+            query = query.where(GoogleAccountConnection.user_id == current_user.id)
+
+        result = await db.execute(query)
+        conns = result.scalars().all()
+        for c in conns:
+            try:
+                await GoogleOAuthClient.revoke_tokens(c.encrypted_tokens)
+            except Exception:
+                pass
+            await db.delete(c)
+        await db.commit()
 
 
 @router.post("/sync", response_model=ImportJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def trigger_manual_sync(
     household_id: uuid.UUID = Query(...),
+    connection_id: Optional[uuid.UUID] = Query(None),
     membership: HouseholdMembership = Depends(require_household_permission(Permission.UPLOAD_RECEIPTS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Manually triggers a synchronization of tickets from connected Gmail account or fallback."""
-    query = select(GoogleAccountConnection).where(
-        GoogleAccountConnection.household_id == household_id
-    )
-    res = await db.execute(query)
-    conn = res.scalar_one_or_none()
+    from app.domains.integrations.tasks import _async_sync_connection
 
-    if conn:
-        from app.domains.integrations.tasks import _async_sync_connection
+    if connection_id:
+        query = select(GoogleAccountConnection).where(
+            GoogleAccountConnection.id == connection_id,
+            GoogleAccountConnection.household_id == household_id,
+        )
+        res = await db.execute(query)
+        conn = res.scalar_one_or_none()
+        if not conn:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conexión de cuenta no encontrada.",
+            )
+
         sync_result = await _async_sync_connection(str(conn.id))
         job_id = uuid.UUID(sync_result["job_id"])
         job = await db.get(ImportJob, job_id)
         if job:
             return job
+
+    query = select(GoogleAccountConnection).where(
+        GoogleAccountConnection.household_id == household_id
+    )
+    res = await db.execute(query)
+    conns = res.scalars().all()
+
+    if conns:
+        last_job = None
+        for conn in conns:
+            sync_result = await _async_sync_connection(str(conn.id))
+            if "job_id" in sync_result:
+                job_id = uuid.UUID(sync_result["job_id"])
+                job = await db.get(ImportJob, job_id)
+                if job:
+                    last_job = job
+        if last_job:
+            return last_job
 
     if settings.ENVIRONMENT.lower() == "production":
         raise HTTPException(

@@ -372,6 +372,8 @@ class ReceiptService:
         return {
             "id": str(r.id),
             "household_id": str(r.household_id) if r.household_id else None,
+            "imported_by_user_id": str(r.imported_by_user_id) if getattr(r, "imported_by_user_id", None) else None,
+            "imported_by_name": r.imported_by_user.full_name if getattr(r, "imported_by_user", None) else None,
             "company_name": r.company_name,
             "company_cif": r.company_cif,
             "store_address": r.store_address,
@@ -408,7 +410,7 @@ class ReceiptService:
         """Queries receipts from database strictly scoped to household or user's households."""
         stmt = (
             select(Receipt)
-            .options(selectinload(Receipt.lines))
+            .options(selectinload(Receipt.lines), selectinload(Receipt.imported_by_user))
             .where(Receipt.assignment_status == "ASSIGNED")
             .order_by(Receipt.purchase_datetime.desc())
         )

@@ -81,6 +81,7 @@ async def _async_sync_connection(connection_id_str: str) -> Dict[str, Any]:
                         extracted=extracted,
                         household_id=conn.household_id,
                         import_job_id=job.id,
+                        imported_by_user_id=conn.user_id,
                     )
                     if saved:
                         job.receipts_imported += 1

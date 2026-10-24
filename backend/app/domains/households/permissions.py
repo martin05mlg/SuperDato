@@ -60,6 +60,7 @@ ROLE_PERMISSIONS = {
         Permission.VIEW_RECEIPTS,
         Permission.UPLOAD_RECEIPTS,
         Permission.VIEW_ANALYTICS,
+        Permission.CONNECT_INTEGRATIONS,
     },
 }
 

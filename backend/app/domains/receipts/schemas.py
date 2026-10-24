@@ -49,6 +49,8 @@ class ReceiptTaxLineResponse(BaseModel):
 class ReceiptResponse(BaseModel):
     id: str
     household_id: Optional[str] = None
+    imported_by_user_id: Optional[str] = None
+    imported_by_name: Optional[str] = None
     company_name: str
     company_cif: str
     store_address: Optional[str] = None

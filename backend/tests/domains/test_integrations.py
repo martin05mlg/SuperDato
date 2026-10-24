@@ -100,3 +100,91 @@ async def test_trigger_sync_and_import_jobs(client: AsyncClient):
     assert len(jobs) >= 1
     assert jobs[0]["household_id"] == household_id
 
+
+@pytest.mark.asyncio
+async def test_multi_user_email_connections_in_same_household(client: AsyncClient):
+    # 1. Register User 1 (Owner)
+    u1_res = await client.post("/api/v1/auth/register", json={
+        "email": "user1.owner@ejemplo.com",
+        "password": "PasswordUser1_123!",
+        "full_name": "Usuario Uno",
+        "registration_token": "TEST-TOKEN-1234",
+    })
+    token1 = u1_res.json()["access_token"]
+    headers1 = {"Authorization": f"Bearer {token1}"}
+
+    # Get household
+    hh_res = await client.get("/api/v1/households", headers=headers1)
+    household_id = hh_res.json()[0]["id"]
+
+    # 2. Register User 2
+    u2_res = await client.post("/api/v1/auth/register", json={
+        "email": "user2.member@ejemplo.com",
+        "password": "PasswordUser2_123!",
+        "full_name": "Usuario Dos",
+        "registration_token": "TEST-TOKEN-1234",
+    })
+    token2 = u2_res.json()["access_token"]
+    headers2 = {"Authorization": f"Bearer {token2}"}
+
+    # Invite and add User 2 to household
+    inv_res = await client.post(
+        f"/api/v1/households/{household_id}/invitations",
+        headers=headers1,
+        json={"invited_email": "user2.member@ejemplo.com", "role": "MEMBER"},
+    )
+    assert inv_res.status_code == 201
+    invitation_token = inv_res.json()["invitation_token"]
+
+    accept_res = await client.post(
+        f"/api/v1/households/invitations/{invitation_token}/accept",
+        headers=headers2,
+    )
+    assert accept_res.status_code == 200
+
+    # 3. User 1 connects their Gmail
+    conn1_res = await client.post(
+        f"/api/v1/integrations/google/connect-mock?household_id={household_id}&email=user1.personal@gmail.com",
+        headers=headers1,
+    )
+    assert conn1_res.status_code == 200
+    conn1_id = conn1_res.json()["id"]
+
+    # 4. User 2 connects their Gmail to the same household
+    conn2_res = await client.post(
+        f"/api/v1/integrations/google/connect-mock?household_id={household_id}&email=user2.personal@gmail.com",
+        headers=headers2,
+    )
+    assert conn2_res.status_code == 200
+    conn2_id = conn2_res.json()["id"]
+
+    # 5. Verify both connections are active in the household
+    list_conns_res = await client.get(
+        f"/api/v1/integrations/google/connections?household_id={household_id}",
+        headers=headers1,
+    )
+    assert list_conns_res.status_code == 200
+    conns = list_conns_res.json()
+    assert len(conns) == 2
+    emails = [c["google_email"] for c in conns]
+    assert "user1.personal@gmail.com" in emails
+    assert "user2.personal@gmail.com" in emails
+
+    # 6. User 2 disconnects their connection
+    del_res = await client.post(
+        f"/api/v1/integrations/google/disconnect?household_id={household_id}&connection_id={conn2_id}",
+        headers=headers2,
+    )
+    assert del_res.status_code == 204
+
+    # 7. Verify only User 1's connection remains
+    list_after_res = await client.get(
+        f"/api/v1/integrations/google/connections?household_id={household_id}",
+        headers=headers1,
+    )
+    assert list_after_res.status_code == 200
+    conns_after = list_after_res.json()
+    assert len(conns_after) == 1
+    assert conns_after[0]["google_email"] == "user1.personal@gmail.com"
+
+

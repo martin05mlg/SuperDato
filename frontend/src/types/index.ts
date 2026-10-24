@@ -86,6 +86,8 @@ export interface ReceiptLineUpdate {
 export interface Receipt {
   id: string;
   household_id?: string | null;
+  imported_by_user_id?: string | null;
+  imported_by_name?: string | null;
   company_name: string;
   company_cif: string;
   store_address?: string | null;
