@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
-import { ShoppingBag, Lock, Mail, AlertCircle, Sparkles } from 'lucide-react';
+import { ShoppingBag, Lock, Mail, AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,30 +33,6 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickAdminLogin = async () => {
-    const defaultEmail = 'admin@superdato.com';
-    const defaultPassword = 'SuperDatoAdmin2026!';
-    setEmail(defaultEmail);
-    setPassword(defaultPassword);
-    setError(null);
-    setLoading(true);
-
-    try {
-      const response = await apiClient.post('/auth/login', {
-        email: defaultEmail,
-        password: defaultPassword,
-      });
-
-      const { access_token, refresh_token, user } = response.data;
-      login(access_token, refresh_token, user);
-      navigate('/');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al iniciar sesión con cuenta de superadministrador.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -79,17 +55,6 @@ export const LoginPage: React.FC = () => {
               <span>{error}</span>
             </div>
           )}
-
-          <div className="mb-5 bg-emerald-50/80 border border-emerald-200 rounded-xl p-3 text-emerald-900 text-xs space-y-1.5">
-            <div className="font-bold flex items-center space-x-1.5 text-emerald-800">
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-              <span>Credenciales Superadministrador:</span>
-            </div>
-            <div className="font-mono text-xs text-slate-800 bg-white/90 p-2 rounded-lg border border-emerald-100 flex flex-col space-y-0.5">
-              <div><span className="text-slate-400">Usuario:</span> <span className="font-semibold select-all">admin@superdato.com</span></div>
-              <div><span className="text-slate-400">Clave:</span> <span className="font-semibold select-all">SuperDatoAdmin2026!</span></div>
-            </div>
-          </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
@@ -134,25 +99,6 @@ export const LoginPage: React.FC = () => {
               {loading ? 'Iniciando sesión...' : 'Entrar'}
             </button>
           </form>
-
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-slate-400 font-semibold tracking-wider">o pruébalo al instante</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleQuickAdminLogin}
-            disabled={loading}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 transition disabled:opacity-50 shadow-2xs"
-          >
-            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Acceso Rápido Superadministrador (1 clic)</span>
-          </button>
 
           <div className="mt-6 text-center text-xs text-slate-500">
             ¿No tienes cuenta?{' '}
