@@ -51,19 +51,31 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
-      SECRET_KEY: ${SECRET_KEY:-insecure_dev_secret_key_change_in_production_1234567890abcdef}
-      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:-01234567890123456789012345678901}
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      SECRET_KEY: ${SECRET_KEY:-}
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:-}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      AUTO_SEED_SAMPLES: ${AUTO_SEED_SAMPLES:-true}
+      SERVER_PUBLIC_URL: ${SERVER_PUBLIC_URL:-http://localhost:5173}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-admin@superdato.com}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-SuperDatoAdmin2026!}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:5173/integrations/google/callback}
     ports:
       - "8000:8000"
+    volumes:
+      - app_data:/app/data
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # -------------------------------------------------------------
   # Celery Asynchronous Worker
@@ -80,15 +92,19 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
-      SECRET_KEY: ${SECRET_KEY:-insecure_dev_secret_key_change_in_production_1234567890abcdef}
-      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:-01234567890123456789012345678901}
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      SECRET_KEY: ${SECRET_KEY:-}
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:-}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - app_data:/app/data
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      api:
         condition: service_healthy
 
   # -------------------------------------------------------------
@@ -100,16 +116,21 @@ services:
       dockerfile: Dockerfile
     container_name: superdato_beat
     restart: unless-stopped
-    command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
+    command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-superdato}:${POSTGRES_PASSWORD:-superdato_secret_password}@db:5432/${POSTGRES_DB:-superdato_db}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
-      SECRET_KEY: ${SECRET_KEY:-insecure_dev_secret_key_change_in_production_1234567890abcdef}
-      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:-01234567890123456789012345678901}
+      SECRET_KEY: ${SECRET_KEY:-}
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY:-}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - app_data:/app/data
     depends_on:
       redis:
+        condition: service_healthy
+      api:
         condition: service_healthy
 
   # -------------------------------------------------------------
@@ -119,14 +140,18 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
     container_name: superdato_web
     restart: unless-stopped
     ports:
       - "5173:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:
   redis_data:
+  app_data:
 

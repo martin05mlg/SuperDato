@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -70,6 +71,9 @@ class AuthService:
         if token_obj.times_used >= token_obj.max_uses:
             token_obj.is_active = False
 
+        # User is superadmin if their email matches configured SUPERADMIN_EMAIL
+        is_super = data.email.lower().strip() == settings.SUPERADMIN_EMAIL.lower().strip()
+
         # Create user
         user = User(
             email=data.email.lower().strip(),
@@ -77,7 +81,7 @@ class AuthService:
             full_name=data.full_name.strip(),
             is_active=True,
             is_verified=True,
-            is_superuser=False,
+            is_superuser=is_super,
         )
         db.add(user)
         await db.flush()

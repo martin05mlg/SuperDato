@@ -30,6 +30,7 @@ import {
   FileSpreadsheet,
   FileJson,
   ChevronDown,
+  Trash2,
 } from 'lucide-react';
 
 export const ReceiptsListPage: React.FC = () => {
@@ -41,6 +42,7 @@ export const ReceiptsListPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -88,6 +90,28 @@ export const ReceiptsListPage: React.FC = () => {
       alert('Error al cargar el detalle del ticket.');
     } finally {
       setLoadingDetailId(null);
+    }
+  };
+
+  // Handle receipt deletion
+  const handleDeleteReceipt = async (receipt: Receipt) => {
+    const confirmDelete = window.confirm(
+      `¿Estás seguro de que deseas eliminar permanentemente el ticket ${receipt.invoice_number} (${receipt.total_amount.toFixed(2)} €)? Se eliminarán sus artículos y el histórico asociado.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      setDeletingId(receipt.id);
+      await receiptsApi.deleteReceipt(receipt.id);
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-receipts-count'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['catalog-products'] });
+    } catch {
+      alert('Error al eliminar el ticket. Comprueba que tengas permisos de Propietario o Administrador.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -559,18 +583,34 @@ export const ReceiptsListPage: React.FC = () => {
                     </td>
 
                     <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => handleViewDetail(r.id)}
-                        disabled={loadingDetailId === r.id}
-                        className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg text-xs transition"
-                      >
-                        {loadingDetailId === r.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Eye className="w-3.5 h-3.5" />
-                        )}
-                        <span>Ver Desglose</span>
-                      </button>
+                      <div className="flex items-center justify-center space-x-1.5">
+                        <button
+                          onClick={() => handleViewDetail(r.id)}
+                          disabled={loadingDetailId === r.id}
+                          className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg text-xs transition"
+                          title="Ver desglose detallado"
+                        >
+                          {loadingDetailId === r.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Eye className="w-3.5 h-3.5" />
+                          )}
+                          <span>Ver Desglose</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteReceipt(r)}
+                          disabled={deletingId === r.id}
+                          className="inline-flex items-center justify-center p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                          title="Eliminar ticket"
+                        >
+                          {deletingId === r.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -624,6 +664,18 @@ export const ReceiptsListPage: React.FC = () => {
       <ReceiptDetailModal
         receipt={selectedReceipt}
         onClose={() => setSelectedReceipt(null)}
+        onReceiptDeleted={() => {
+          setSelectedReceipt(null);
+          queryClient.invalidateQueries({ queryKey: ['receipts'] });
+          queryClient.invalidateQueries({ queryKey: ['pending-receipts'] });
+          queryClient.invalidateQueries({ queryKey: ['pending-receipts-count'] });
+          queryClient.invalidateQueries({ queryKey: ['analytics'] });
+          queryClient.invalidateQueries({ queryKey: ['catalog-products'] });
+        }}
+        onReceiptUpdated={() => {
+          queryClient.invalidateQueries({ queryKey: ['receipts'] });
+          queryClient.invalidateQueries({ queryKey: ['analytics'] });
+        }}
       />
     </div>
   );

@@ -30,7 +30,12 @@ class AnalyticsService:
     @staticmethod
     async def _ensure_data(db: AsyncSession):
         from app.core.config import settings
+        from app.domains.admin.models import SystemSetting
         if settings.AUTO_SEED_SAMPLES:
+            stmt_setting = select(SystemSetting).where(SystemSetting.key == "samples_seeded_once")
+            setting = (await db.execute(stmt_setting)).scalar_one_or_none()
+            if setting and setting.value == "true":
+                return
             count_stmt = select(func.count(Receipt.id))
             count = (await db.execute(count_stmt)).scalar_one()
             if count == 0:

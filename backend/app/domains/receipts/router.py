@@ -228,6 +228,30 @@ async def update_receipt(
     return updated
 
 
+@router.delete("/{receipt_id}", status_code=status.HTTP_200_OK)
+async def delete_receipt(
+    receipt_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Deletes a receipt and all associated lines, taxes and price observations.
+    Requires OWNER or ADMIN role in the household, or superadmin privileges.
+    """
+    success = await ReceiptService.delete_receipt(
+        db=db,
+        receipt_id=receipt_id,
+        user_id=current_user.id,
+        is_superuser=current_user.is_superuser,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket con ID '{receipt_id}' no encontrado.",
+        )
+    return {"success": True, "message": "Ticket eliminado correctamente."}
+
+
 @router.patch("/{receipt_id}/lines/{line_id}", response_model=ReceiptLineResponse)
 async def update_receipt_line(
     receipt_id: str,

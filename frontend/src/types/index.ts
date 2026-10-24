@@ -468,3 +468,18 @@ export interface ShoppingItemUpdatePayload {
   notes?: string | null;
 }
 
+export interface SystemSettings {
+  server_public_url: string;
+  google_client_id: string;
+  google_client_secret_masked: string;
+  google_client_secret_set: boolean;
+  google_redirect_uri: string;
+}
+
+export interface UpdateSystemSettingsDto {
+  server_public_url?: string;
+  google_client_id?: string;
+  google_client_secret?: string;
+}
+
+

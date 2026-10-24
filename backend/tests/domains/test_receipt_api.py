@@ -95,3 +95,28 @@ async def test_analytics_with_date_range(auth_client: AsyncClient):
     assert "receipt_count" in data
 
 
+@pytest.mark.asyncio
+async def test_delete_receipt_and_prevent_sample_reseed(auth_client: AsyncClient):
+    # 1. List receipts
+    list_res = await auth_client.get("/api/v1/receipts")
+    assert list_res.status_code == 200
+    receipts = list_res.json()
+    assert len(receipts) > 0
+
+    receipt_to_delete = receipts[0]
+    r_id = receipt_to_delete["id"]
+
+    # 2. Delete the receipt
+    del_res = await auth_client.delete(f"/api/v1/receipts/{r_id}")
+    assert del_res.status_code == 200
+    assert del_res.json()["success"] is True
+
+    # 3. Verify it is gone
+    get_res = await auth_client.get(f"/api/v1/receipts/{r_id}")
+    assert get_res.status_code == 404
+
+    # 4. Deleting non-existent returns 404
+    del_res2 = await auth_client.delete(f"/api/v1/receipts/{r_id}")
+    assert del_res2.status_code == 404
+
+

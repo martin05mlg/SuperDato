@@ -24,7 +24,12 @@ MERCADONA_GMAIL_QUERY = "(from:mercadona OR from:mail.mercadona.com OR subject:m
 
 class GoogleOAuthClient:
     @staticmethod
-    def get_authorization_url(user_id: str, household_id: str) -> str:
+    def get_authorization_url(
+        user_id: str,
+        household_id: str,
+        client_id: Optional[str] = None,
+        redirect_uri: Optional[str] = None,
+    ) -> str:
         """Generates Google OAuth 2.0 consent screen URL with cryptographically signed JWT state."""
         now = datetime.now(timezone.utc)
         state_payload = {
@@ -40,9 +45,12 @@ class GoogleOAuthClient:
             algorithm=settings.JWT_ALGORITHM,
         )
 
+        effective_client_id = client_id or settings.GOOGLE_CLIENT_ID or "mock-google-client-id"
+        effective_redirect_uri = redirect_uri or settings.GOOGLE_REDIRECT_URI
+
         params = {
-            "client_id": settings.GOOGLE_CLIENT_ID or "mock-google-client-id",
-            "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+            "client_id": effective_client_id,
+            "redirect_uri": effective_redirect_uri,
             "response_type": "code",
             "scope": " ".join(GMAIL_SCOPES),
             "access_type": "offline",
@@ -67,17 +75,26 @@ class GoogleOAuthClient:
             raise ValueError("Estado OAuth de Google inválido, expirado o manipulado.")
 
     @staticmethod
-    async def exchange_code_for_tokens(code: str) -> Dict[str, Any]:
+    async def exchange_code_for_tokens(
+        code: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        redirect_uri: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Exchanges authorization code for access and refresh tokens."""
+        effective_client_id = client_id or settings.GOOGLE_CLIENT_ID
+        effective_client_secret = client_secret or settings.GOOGLE_CLIENT_SECRET
+        effective_redirect_uri = redirect_uri or settings.GOOGLE_REDIRECT_URI
+
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 GOOGLE_TOKEN_URL,
                 data={
-                    "client_id": settings.GOOGLE_CLIENT_ID,
-                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "client_id": effective_client_id,
+                    "client_secret": effective_client_secret,
                     "code": code,
                     "grant_type": "authorization_code",
-                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "redirect_uri": effective_redirect_uri,
                 },
             )
 

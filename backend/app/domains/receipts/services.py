@@ -4,7 +4,8 @@ import os
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
-from sqlalchemy import func, select
+from fastapi import HTTPException, status
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,12 +18,15 @@ from app.domains.receipts.models import Receipt, ReceiptLine, ReceiptTaxLine
 
 # In-memory storage cache synchronized with parsing engine for instant testing & responses
 _RECEIPTS_STORE: Dict[str, Dict] = {}
+_SAMPLES_LOADED_ONCE: bool = False
 
 
 def load_initial_samples_if_empty():
     """Scans samples/ directory and parses real Mercadona tickets into in-memory store if empty."""
-    if len(_RECEIPTS_STORE) > 0:
+    global _SAMPLES_LOADED_ONCE
+    if _SAMPLES_LOADED_ONCE or len(_RECEIPTS_STORE) > 0:
         return
+    _SAMPLES_LOADED_ONCE = True
 
     sample_files = glob.glob("samples/*.pdf")
     if not sample_files:
@@ -53,9 +57,20 @@ class ReceiptService:
     @staticmethod
     async def sync_sample_receipts_to_db(db: AsyncSession):
         """Idempotently seeds database with sample receipts, normalized products, and price observations."""
+        from app.domains.admin.models import SystemSetting
+
+        # Never re-seed if samples were already seeded previously (respects user deleting receipts)
+        stmt_setting = select(SystemSetting).where(SystemSetting.key == "samples_seeded_once")
+        setting = (await db.execute(stmt_setting)).scalar_one_or_none()
+        if setting and setting.value == "true":
+            return
+
         stmt = select(func.count(Receipt.id))
         count = (await db.execute(stmt)).scalar_one()
         if count > 0:
+            if not setting:
+                db.add(SystemSetting(key="samples_seeded_once", value="true", description="Muestra inicial de tickets cargada"))
+                await db.commit()
             return
 
         # Ensure default categories
@@ -191,6 +206,18 @@ class ReceiptService:
                     await db.commit()
             except Exception as e:
                 print(f"Error syncing {pdf_path} to DB: {e}")
+
+        # Permanently mark samples as seeded so deleting receipts never causes them to re-seed
+        try:
+            stmt_setting = select(SystemSetting).where(SystemSetting.key == "samples_seeded_once")
+            setting = (await db.execute(stmt_setting)).scalar_one_or_none()
+            if not setting:
+                db.add(SystemSetting(key="samples_seeded_once", value="true", description="Muestra inicial de tickets cargada"))
+            else:
+                setting.value = "true"
+            await db.commit()
+        except Exception:
+            pass
 
     @staticmethod
     async def save_extracted_receipt_to_db(
@@ -398,12 +425,16 @@ class ReceiptService:
 
         # In testing / empty global store when no specific household was queried:
         if not receipts and household_id is None:
-            await ReceiptService.sync_sample_receipts_to_db(db)
-            all_stmt = select(Receipt).options(selectinload(Receipt.lines)).where(Receipt.assignment_status == "ASSIGNED")
-            res = await db.execute(all_stmt)
-            receipts = res.scalars().all()
-            if not receipts:
-                return ReceiptService.get_all_receipts()
+            from app.domains.admin.models import SystemSetting
+            stmt_setting = select(SystemSetting).where(SystemSetting.key == "samples_seeded_once")
+            setting = (await db.execute(stmt_setting)).scalar_one_or_none()
+            if not (setting and setting.value == "true"):
+                await ReceiptService.sync_sample_receipts_to_db(db)
+                all_stmt = select(Receipt).options(selectinload(Receipt.lines)).where(Receipt.assignment_status == "ASSIGNED")
+                res = await db.execute(all_stmt)
+                receipts = res.scalars().all()
+                if not receipts:
+                    return ReceiptService.get_all_receipts()
 
         return [ReceiptService._receipt_to_dict(r) for r in receipts]
 
@@ -585,6 +616,76 @@ class ReceiptService:
 
         receipt["is_manual_override"] = True
         return receipt
+
+    @staticmethod
+    async def delete_receipt(
+        db: AsyncSession,
+        receipt_id: str,
+        user_id: uuid.UUID,
+        is_superuser: bool = False,
+    ) -> bool:
+        """
+        Deletes a receipt, its line items, associated price observations and tax lines.
+        Checks permissions: superuser or OWNER/ADMIN of receipt's household, or unassigned/creator.
+        """
+        from app.domains.households.models import HouseholdMembership
+        from app.domains.households.permissions import Role
+
+        try:
+            r_uuid = uuid.UUID(receipt_id)
+        except ValueError:
+            if receipt_id in _RECEIPTS_STORE:
+                _RECEIPTS_STORE.pop(receipt_id, None)
+                return True
+            return False
+
+        stmt = (
+            select(Receipt)
+            .options(selectinload(Receipt.lines))
+            .where(Receipt.id == r_uuid)
+        )
+        res = await db.execute(stmt)
+        receipt = res.scalar_one_or_none()
+        if not receipt:
+            if receipt_id in _RECEIPTS_STORE:
+                _RECEIPTS_STORE.pop(receipt_id, None)
+                return True
+            return False
+
+        # Permission check
+        if not is_superuser:
+            if receipt.household_id:
+                m_stmt = select(HouseholdMembership).where(
+                    HouseholdMembership.household_id == receipt.household_id,
+                    HouseholdMembership.user_id == user_id,
+                )
+                m_res = await db.execute(m_stmt)
+                membership = m_res.scalar_one_or_none()
+                if not membership or Role(membership.role) not in [Role.OWNER, Role.ADMIN]:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="No tienes permisos suficientes en este hogar para eliminar el ticket.",
+                    )
+            else:
+                if receipt.imported_by_user_id and receipt.imported_by_user_id != user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="No tienes permisos para eliminar este ticket.",
+                    )
+
+        # Delete any price observations linked to these lines
+        line_ids = [line.id for line in receipt.lines]
+        if line_ids:
+            obs_del_stmt = delete(PriceObservation).where(PriceObservation.receipt_line_id.in_(line_ids))
+            await db.execute(obs_del_stmt)
+
+        # Delete the receipt (cascades to receipt_lines and receipt_tax_lines)
+        await db.delete(receipt)
+        await db.commit()
+
+        # Evict from in-memory fallback store
+        _RECEIPTS_STORE.pop(str(receipt_id), None)
+        return True
 
     @staticmethod
     async def update_receipt_line_in_db(

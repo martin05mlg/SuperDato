@@ -34,9 +34,18 @@ async def get_google_authorize_url(
     household_id: uuid.UUID = Query(...),
     current_user: User = Depends(get_current_user),
     membership: HouseholdMembership = Depends(require_household_permission(Permission.CONNECT_INTEGRATIONS)),
+    db: AsyncSession = Depends(get_db),
 ):
     """Generates the Google OAuth 2.0 authorization URL to connect a Gmail account to this household."""
-    url = GoogleOAuthClient.get_authorization_url(str(current_user.id), str(household_id))
+    from app.domains.admin.services import AdminService
+
+    client_id, _, redirect_uri = await AdminService.get_effective_google_config(db)
+    url = GoogleOAuthClient.get_authorization_url(
+        str(current_user.id),
+        str(household_id),
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+    )
     return GoogleAuthUrlResponse(authorization_url=url)
 
 
@@ -78,8 +87,16 @@ async def google_oauth_callback(
                 detail="No tienes permisos en este hogar para vincular integraciones de Google.",
             )
 
+    from app.domains.admin.services import AdminService
+    client_id, client_secret, redirect_uri = await AdminService.get_effective_google_config(db)
+
     try:
-        tokens = await GoogleOAuthClient.exchange_code_for_tokens(code)
+        tokens = await GoogleOAuthClient.exchange_code_for_tokens(
+            code,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+        )
         google_email = await GoogleOAuthClient.get_user_email(tokens["access_token"])
     except Exception as e:
         raise HTTPException(

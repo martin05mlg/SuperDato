@@ -1,11 +1,15 @@
+import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, async_session_maker
+from app.domains.auth.models import RegistrationToken
 
 # Import all domain models so SQLAlchemy Base registers their table definitions
+import app.domains.admin.models
 import app.domains.auth.models
 import app.domains.households.models
 import app.domains.integrations.models
@@ -16,10 +20,78 @@ import app.domains.shopping.models
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: If using SQLite in dev or testing, auto-create tables
-    if "sqlite" in settings.DATABASE_URL:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    # Startup: Ensure all database tables exist
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # Bootstrap initial registration token & superadmin if needed
+    async with async_session_maker() as session:
+        has_tokens = (await session.execute(select(RegistrationToken))).scalars().first()
+        if not has_tokens:
+            bootstrap_token = RegistrationToken(
+                id=uuid.uuid4(),
+                token="SUPERDATO-INIT-2026",
+                note="Token inicial de bienvenida para el primer administrador",
+                max_uses=1,
+                times_used=0,
+                is_active=True,
+            )
+            session.add(bootstrap_token)
+            await session.commit()
+        else:
+            # Enforce single-use constraint on initial bootstrap token if it was previously initialized with 50 uses
+            init_token = (
+                await session.execute(
+                    select(RegistrationToken).where(RegistrationToken.token == "SUPERDATO-INIT-2026")
+                )
+            ).scalar_one_or_none()
+            if init_token and init_token.max_uses > 1:
+                init_token.max_uses = 1
+                if init_token.times_used >= 1:
+                    init_token.is_active = False
+                await session.commit()
+
+        # Ensure superadmin user exists and is up-to-date with compose configuration
+        from app.domains.auth.models import User
+        from app.domains.households.models import Household, HouseholdMembership
+        from app.core.security import hash_password
+
+        existing_user = (await session.execute(select(User).where(User.email == settings.SUPERADMIN_EMAIL.lower().strip()))).scalar_one_or_none()
+        if existing_user:
+            existing_user.is_superuser = True
+            existing_user.hashed_password = hash_password(settings.SUPERADMIN_PASSWORD)
+            await session.commit()
+        else:
+            new_admin = User(
+                id=uuid.uuid4(),
+                email=settings.SUPERADMIN_EMAIL.lower().strip(),
+                hashed_password=hash_password(settings.SUPERADMIN_PASSWORD),
+                full_name="Superadministrador",
+                is_active=True,
+                is_verified=True,
+                is_superuser=True,
+            )
+            session.add(new_admin)
+            await session.flush()
+
+            hh = Household(
+                id=uuid.uuid4(),
+                name=f"Hogar de {new_admin.full_name}",
+                currency="EUR",
+                created_by_user_id=new_admin.id,
+            )
+            session.add(hh)
+            await session.flush()
+
+            membership = HouseholdMembership(
+                id=uuid.uuid4(),
+                household_id=hh.id,
+                user_id=new_admin.id,
+                role="OWNER",
+            )
+            session.add(membership)
+            await session.commit()
+
     yield
     # Shutdown: Cleanly dispose of connection pools
     await engine.dispose()

@@ -1,7 +1,73 @@
+import json
 import os
-from typing import List, Union
+from pathlib import Path
+import secrets
+from typing import List, Tuple, Union
 from pydantic import AnyHttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _resolve_data_dir() -> Path:
+    """Resolves directory for persistent state (e.g. auto-generated secrets)."""
+    env_dir = os.getenv("SUPERDATO_DATA_DIR")
+    if env_dir:
+        p = Path(env_dir)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    # Standard container mount path
+    if os.path.exists("/app"):
+        p = Path("/app/data")
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except Exception:
+            pass
+    # Local fallback
+    p = Path(__file__).resolve().parent.parent.parent / "data"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _load_or_create_secrets() -> Tuple[str, str]:
+    """
+    Loads or generates persistent cryptographic secrets.
+    Saves to a shared .secrets.json file in the persistent data volume
+    so all containers (API, Worker, Beat) share identical keys across restarts.
+    """
+    data_dir = _resolve_data_dir()
+    secrets_file = data_dir / ".secrets.json"
+
+    if secrets_file.exists():
+        try:
+            with open(secrets_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                s_key = data.get("secret_key")
+                e_key = data.get("encryption_master_key")
+                if s_key and e_key:
+                    return str(s_key), str(e_key)
+        except Exception:
+            pass
+
+    sec_key = secrets.token_urlsafe(64)
+    enc_key = secrets.token_urlsafe(32)
+    payload = {
+        "secret_key": sec_key,
+        "encryption_master_key": enc_key,
+    }
+    try:
+        temp_file = data_dir / f".secrets.tmp.{os.getpid()}"
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        os.replace(temp_file, secrets_file)
+    except Exception:
+        if secrets_file.exists():
+            try:
+                with open(secrets_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return str(data.get("secret_key", sec_key)), str(data.get("encryption_master_key", enc_key))
+            except Exception:
+                pass
+    return sec_key, enc_key
 
 
 class Settings(BaseSettings):
@@ -50,40 +116,57 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
     # Security & JWT
-    SECRET_KEY: str = "insecure_dev_secret_key_change_in_production_1234567890abcdef"
+    SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
 
     # Master Key for Encrypting Google OAuth Tokens in Database
-    # Must be 32 url-safe base64-encoded bytes (Fernet key) or 32 chars
-    ENCRYPTION_MASTER_KEY: str = "01234567890123456789012345678901"
+    # Must be 32 url-safe base64-encoded bytes or 32+ chars
+    ENCRYPTION_MASTER_KEY: str = ""
 
-    # Google OAuth 2.0 Credentials
+    # Google OAuth 2.0 Credentials (Fallback or Initial)
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:5173/integrations/google/callback"
+
+    # Server Public URL & Superadmin Defaults
+    SERVER_PUBLIC_URL: str = "http://localhost:5173"
+    SUPERADMIN_EMAIL: str = "admin@superdato.com"
+    SUPERADMIN_PASSWORD: str = "SuperDatoAdmin2026!"
 
     # Data Seeding Control
     AUTO_SEED_SAMPLES: bool = True
 
     @model_validator(mode="after")
-    def validate_production_secrets(self) -> "Settings":
-        """Prevents starting in production mode with default/weak cryptographic secrets."""
+    def resolve_and_validate_secrets(self) -> "Settings":
+        """
+        Auto-generates and persists cryptographically strong secrets if omitted or empty,
+        ensuring zero-configuration deployments remain completely secure across restarts.
+        """
+        # 1. Auto-generate persistent secrets when omitted or blank
+        if not self.SECRET_KEY or not self.ENCRYPTION_MASTER_KEY:
+            stored_sec, stored_enc = _load_or_create_secrets()
+            if not self.SECRET_KEY:
+                self.SECRET_KEY = stored_sec
+            if not self.ENCRYPTION_MASTER_KEY:
+                self.ENCRYPTION_MASTER_KEY = stored_enc
+
+        # 2. Block known insecure defaults when explicitly provided in production
         if self.ENVIRONMENT.lower() == "production":
             if (
                 self.SECRET_KEY.startswith("insecure_dev_secret_key")
                 or len(self.SECRET_KEY) < 32
             ):
                 raise ValueError(
-                    "Seguridad crítica: En entorno de producción debes configurar un SECRET_KEY seguro de al menos 32 caracteres."
+                    "Seguridad crítica: En entorno de producción debes configurar un SECRET_KEY seguro de al menos 32 caracteres (o dejarlo vacío para auto-generación segura)."
                 )
             if (
                 self.ENCRYPTION_MASTER_KEY == "01234567890123456789012345678901"
                 or len(self.ENCRYPTION_MASTER_KEY) < 32
             ):
                 raise ValueError(
-                    "Seguridad crítica: En entorno de producción debes configurar una ENCRYPTION_MASTER_KEY única de al menos 32 caracteres."
+                    "Seguridad crítica: En entorno de producción debes configurar una ENCRYPTION_MASTER_KEY única de al menos 32 caracteres (o dejarlo vacío para auto-generación segura)."
                 )
         return self
 

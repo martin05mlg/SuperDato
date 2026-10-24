@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '../../api/admin.api';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import type { RegistrationToken, User, Household, SystemInfo } from '../../types';
+import type { RegistrationToken, User, Household, SystemInfo, SystemSettings } from '../../types';
 import {
   ShieldAlert,
   Users,
@@ -23,9 +23,15 @@ import {
   Database,
   CheckCircle2,
   XCircle,
+  Globe,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Save,
+  AlertTriangle,
 } from 'lucide-react';
 
-type AdminTab = 'tokens' | 'users' | 'households' | 'system';
+type AdminTab = 'tokens' | 'users' | 'households' | 'oauth' | 'system';
 
 export const AdminDashboardPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -91,6 +97,56 @@ export const AdminDashboardPage: React.FC = () => {
     queryFn: adminApi.getSystemInfo,
     enabled: activeTab === 'system',
   });
+
+  const { data: systemSettings } = useQuery<SystemSettings>({
+    queryKey: ['admin-settings'],
+    queryFn: adminApi.getSettings,
+  });
+
+  // Settings form state
+  const [serverUrlInput, setServerUrlInput] = useState('');
+  const [clientIdInput, setClientIdInput] = useState('');
+  const [clientSecretInput, setClientSecretInput] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [copiedRedirectUri, setCopiedRedirectUri] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+
+  useEffect(() => {
+    if (systemSettings) {
+      setServerUrlInput(systemSettings.server_public_url || '');
+      setClientIdInput(systemSettings.google_client_id || '');
+      setClientSecretInput(systemSettings.google_client_secret_masked || '');
+    }
+  }, [systemSettings]);
+
+  const calculatedRedirectUri = serverUrlInput.trim()
+    ? `${serverUrlInput.trim().replace(/\/+$/, '')}/integrations/google/callback`
+    : (systemSettings?.google_redirect_uri || 'http://localhost:5173/integrations/google/callback');
+
+  const handleCopyRedirectUri = () => {
+    navigator.clipboard.writeText(calculatedRedirectUri);
+    setCopiedRedirectUri(true);
+    setTimeout(() => setCopiedRedirectUri(false), 2500);
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsSavingSettings(true);
+      await adminApi.updateSettings({
+        server_public_url: serverUrlInput.trim(),
+        google_client_id: clientIdInput.trim(),
+        google_client_secret: clientSecretInput.trim().startsWith('••') ? undefined : clientSecretInput.trim(),
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
+      showNotification('Configuración de Google OAuth y Servidor guardada con éxito.');
+    } catch (err: any) {
+      showNotification(err.response?.data?.detail || 'Error al guardar configuración.', 'error');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   // Guard: Superuser only
   if (!user?.is_superuser) {
@@ -398,6 +454,18 @@ export const AdminDashboardPage: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('oauth')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            activeTab === 'oauth'
+              ? 'bg-purple-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Globe className="w-4 h-4" />
+          <span>Google OAuth & Servidor</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('system')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
             activeTab === 'system'
@@ -406,7 +474,7 @@ export const AdminDashboardPage: React.FC = () => {
           }`}
         >
           <Server className="w-4 h-4" />
-          <span>Servidor y Configuración</span>
+          <span>Diagnóstico del Servidor</span>
         </button>
       </div>
 
@@ -700,7 +768,231 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: SYSTEM & SERVER INFO */}
+      {/* TAB 4: GOOGLE OAUTH & SYSTEM CONFIGURATION */}
+      {activeTab === 'oauth' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <div className="flex items-center space-x-2">
+                <Globe className="w-5 h-5 text-purple-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Configuración de Google OAuth 2.0 y Servidor
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Configura las credenciales de tu proyecto de Google Cloud para habilitar la importación automática de tickets de Mercadona desde Gmail. Los cambios guardados se aplican dinámicamente en tiempo real.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              {/* URL Pública del Servidor */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  URL Pública del Servidor / Dominio Base
+                </label>
+                <div className="relative">
+                  <input
+                    type="url"
+                    required
+                    value={serverUrlInput}
+                    onChange={(e) => setServerUrlInput(e.target.value)}
+                    placeholder="http://localhost:5173 o https://superdato.tudominio.com"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  La dirección base con la que acceden los usuarios desde su navegador. La URI de redirección se calcula automáticamente a partir de esta URL.
+                </p>
+              </div>
+
+              {/* URI de Redirección Autorizada (Calculada y Copiable) */}
+              <div className="bg-purple-50/70 border border-purple-200/80 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center space-x-1.5">
+                    <span>URI de redireccionamiento autorizada de Google</span>
+                    <span className="bg-purple-200/80 text-purple-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      Auto-calculada
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyRedirectUri}
+                    className="inline-flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 bg-white hover:bg-purple-100 text-purple-700 rounded-lg border border-purple-200 shadow-sm transition"
+                  >
+                    {copiedRedirectUri ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700 font-bold">Copiada</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar URI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="bg-white px-3.5 py-2.5 rounded-xl border border-purple-200 text-xs font-mono text-purple-900 select-all break-all shadow-inner">
+                  {calculatedRedirectUri}
+                </div>
+
+                <p className="text-[11px] text-purple-700/90 leading-relaxed">
+                  Pega exactamente este valor en <strong>Google Cloud Console &rarr; Credenciales &rarr; Tu ID de Cliente &rarr; URIs de redireccionamiento autorizados</strong>.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                {/* Google Client ID */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                      Google Client ID
+                    </label>
+                    {clientIdInput.endsWith('.apps.googleusercontent.com') && (
+                      <span className="text-[10px] font-semibold text-emerald-600 flex items-center space-x-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Formato válido</span>
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={clientIdInput}
+                    onChange={(e) => setClientIdInput(e.target.value)}
+                    placeholder="ej. 123456789-xxxxxxxx.apps.googleusercontent.com"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Identificador de cliente de aplicación web creado en Google Cloud Console.
+                  </p>
+                </div>
+
+                {/* Google Client Secret */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                      Google Client Secret
+                    </label>
+                    {systemSettings?.google_client_secret_set && (
+                      <span className="text-[10px] font-semibold text-emerald-600 flex items-center space-x-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Cifrado y guardado</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showSecret ? 'text' : 'password'}
+                      value={clientSecretInput}
+                      onChange={(e) => setClientSecretInput(e.target.value)}
+                      placeholder={systemSettings?.google_client_secret_set ? '•••••••••••• (dejar intacto para mantener)' : 'ej. GOCSPX-xxxxxxxxxxxxxxxx'}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono pr-10 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecret(!showSecret)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md"
+                    >
+                      {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Se almacena cifrado en la base de datos con Fernet (AES-128-CBC + HMAC-SHA256).
+                  </p>
+                </div>
+              </div>
+
+              {/* Botón Guardar */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowGuide(!showGuide)}
+                  className="text-xs font-semibold text-purple-600 hover:text-purple-800 flex items-center space-x-1.5 transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>{showGuide ? 'Ocultar guía de Google Cloud' : 'Ver guía paso a paso para configurar Google Cloud'}</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className="inline-flex items-center space-x-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSavingSettings ? 'Guardando...' : 'Guardar Configuración'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Guía Paso a Paso */}
+          {showGuide && (
+            <div className="bg-slate-900 text-slate-100 rounded-2xl p-6 shadow-xl space-y-4 border border-slate-800 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-amber-400 font-bold">📋</span>
+                  <h4 className="text-sm font-bold text-white tracking-wide">
+                    Guía Rápida: Cómo crear tus Credenciales en Google Cloud Console
+                  </h4>
+                </div>
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition"
+                >
+                  <span>Abrir Google Console</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300">
+                <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
+                  <div className="font-bold text-amber-300 text-xs">1. Crear Proyecto y Habilitar Gmail API</div>
+                  <p className="leading-relaxed">
+                    Entra en Google Cloud Console, crea un nuevo proyecto llamado <strong>SuperDato</strong> y ve a <em>APIs y Servicios &rarr; Biblioteca</em>. Busca <strong>Gmail API</strong> y pulsa <strong>Habilitar</strong>.
+                  </p>
+                </div>
+
+                <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
+                  <div className="font-bold text-amber-300 text-xs">2. Pantalla de Consentimiento OAuth</div>
+                  <p className="leading-relaxed">
+                    En <em>Pantalla de consentimiento</em>, elige <strong>Externo</strong>. Rellena el nombre de la app y tu email. En la sección <em>Permisos (Scopes)</em> añade <code>https://www.googleapis.com/auth/gmail.readonly</code>.
+                  </p>
+                </div>
+
+                <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
+                  <div className="font-bold text-amber-300 text-xs">3. Crear ID de Cliente OAuth</div>
+                  <p className="leading-relaxed">
+                    En <em>Credenciales &rarr; Crear credenciales</em>, selecciona <strong>ID de cliente de OAuth</strong>. Selecciona Tipo: <strong>Aplicación web</strong>.
+                  </p>
+                </div>
+
+                <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
+                  <div className="font-bold text-amber-300 text-xs">4. Pegar URI de Redirección Autorizada</div>
+                  <p className="leading-relaxed">
+                    En el apartado <strong>URIs de redireccionamiento autorizados</strong>, pulsa <em>Añadir URI</em> y pega exactamente:
+                    <br />
+                    <code className="text-purple-300 font-mono text-[11px] select-all bg-slate-900 px-1 py-0.5 rounded">
+                      {calculatedRedirectUri}
+                    </code>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-[11px] text-amber-200 flex items-start space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <span>
+                  <strong>Usuarios de prueba:</strong> Mientras la app esté en modo <em>Prueba</em> en Google Cloud, añade los correos de Gmail que desees sincronizar en la sección <em>Usuarios de prueba</em> de la pantalla de consentimiento.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 5: SYSTEM & SERVER INFO */}
       {activeTab === 'system' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -156,9 +156,34 @@ async def revoke_registration_token(
     return await AdminService.revoke_registration_token(db, token_id)
 
 
+class UpdateSettingsRequest(BaseModel):
+    server_public_url: Optional[str] = None
+    google_client_id: Optional[str] = None
+    google_client_secret: Optional[str] = None
+
+
 # -------------------------------------------------------------
-# System Info
+# System Info & Dynamic Configuration
 # -------------------------------------------------------------
+@router.get("/settings")
+async def get_system_settings(
+    current_admin: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns dynamic system settings including Google OAuth configuration and redirect URI."""
+    return await AdminService.get_system_settings(db)
+
+
+@router.patch("/settings")
+async def update_system_settings(
+    data: UpdateSettingsRequest,
+    current_admin: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    """Updates dynamic system settings (Google Client ID/Secret, Server URL)."""
+    return await AdminService.update_system_settings(db, data.model_dump(exclude_unset=True))
+
+
 @router.get("/system-info")
 async def get_system_info(
     current_admin: User = Depends(require_superuser),

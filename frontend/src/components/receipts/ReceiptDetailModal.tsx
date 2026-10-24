@@ -11,6 +11,8 @@ import {
   Check,
   AlertCircle,
   Package,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { receiptsApi } from '../../api/receipts.api';
 
@@ -18,11 +20,13 @@ interface Props {
   receipt: Receipt | null;
   onClose: () => void;
   onReceiptUpdated?: (updated: Receipt) => void;
+  onReceiptDeleted?: (receiptId: string) => void;
 }
 
-export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceiptUpdated }) => {
+export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceiptUpdated, onReceiptDeleted }) => {
   const [currentReceipt, setCurrentReceipt] = useState<Receipt | null>(receipt);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editForm, setEditForm] = useState<{
     raw_description: string;
     quantity: number;
@@ -86,6 +90,27 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
       setSaveError(err.response?.data?.detail || 'Error al guardar la corrección de la línea.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!currentReceipt) return;
+    const confirmDelete = window.confirm(
+      `¿Estás seguro de que deseas eliminar permanentemente el ticket ${currentReceipt.invoice_number}? Se borrarán también sus líneas y observaciones asociadas.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await receiptsApi.deleteReceipt(currentReceipt.id);
+      if (onReceiptDeleted) {
+        onReceiptDeleted(currentReceipt.id);
+      }
+      onClose();
+    } catch {
+      alert('Error al eliminar el ticket. Comprueba que tengas permisos de Propietario o Administrador.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -401,9 +426,23 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
 
         {/* Footer with Totals */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-          <div className="text-xs text-slate-500 flex items-center space-x-1">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Conciliación contable verificada</span>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5" />
+              )}
+              <span>Eliminar Ticket</span>
+            </button>
+            <div className="text-xs text-slate-500 hidden sm:flex items-center space-x-1">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Conciliación contable verificada</span>
+            </div>
           </div>
 
           <div className="flex items-center space-x-3">

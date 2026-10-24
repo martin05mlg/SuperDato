@@ -110,4 +110,9 @@ export const receiptsApi = {
     });
     return res.data;
   },
+
+  deleteReceipt: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const res = await apiClient.delete<{ success: boolean; message: string }>(`/receipts/${id}`);
+    return res.data;
+  },
 };

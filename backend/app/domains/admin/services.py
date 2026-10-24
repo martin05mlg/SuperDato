@@ -2,7 +2,7 @@ import secrets
 import string
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -303,4 +303,132 @@ class AdminService:
         token_obj.is_active = False
         await db.commit()
         return {"status": "success", "message": "Token de registro revocado."}
+
+    # -------------------------------------------------------------
+    # System Settings & Google OAuth Configuration
+    # -------------------------------------------------------------
+    @staticmethod
+    async def get_system_settings(db: AsyncSession) -> Dict[str, Any]:
+        """Retrieves system settings, masking sensitive credentials and calculating the redirect URI."""
+        from app.core.config import settings
+        from app.domains.admin.models import SystemSetting
+        from app.core.security import decrypt_secret
+
+        res = await db.execute(select(SystemSetting))
+        settings_rows = res.scalars().all()
+        settings_map = {row.key: row.value for row in settings_rows}
+
+        server_public_url = settings_map.get("server_public_url") or settings.SERVER_PUBLIC_URL or "http://localhost:5173"
+        server_public_url = server_public_url.rstrip("/")
+
+        google_client_id = settings_map.get("google_client_id") or settings.GOOGLE_CLIENT_ID or ""
+
+        # Secret handling
+        raw_secret = settings_map.get("google_client_secret") or settings.GOOGLE_CLIENT_SECRET or ""
+        google_client_secret_set = bool(raw_secret.strip())
+        if google_client_secret_set:
+            try:
+                decrypted = decrypt_secret(raw_secret)
+                secret_to_mask = decrypted
+            except Exception:
+                secret_to_mask = raw_secret
+
+            if len(secret_to_mask) > 6:
+                masked = "••••••••••••" + secret_to_mask[-4:]
+            else:
+                masked = "••••••••••••"
+        else:
+            masked = ""
+
+        # Google Redirect URI dynamically calculated based on public server URL
+        google_redirect_uri = f"{server_public_url}/integrations/google/callback"
+
+        return {
+            "server_public_url": server_public_url,
+            "google_client_id": google_client_id,
+            "google_client_secret_masked": masked,
+            "google_client_secret_set": google_client_secret_set,
+            "google_redirect_uri": google_redirect_uri,
+        }
+
+    @staticmethod
+    async def update_system_settings(db: AsyncSession, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Persists updated system settings."""
+        from app.domains.admin.models import SystemSetting
+        from app.core.security import encrypt_secret
+
+        # 1. Server Public URL
+        if "server_public_url" in data and data["server_public_url"] is not None:
+            clean_url = str(data["server_public_url"]).strip().rstrip("/")
+            if clean_url:
+                stmt = select(SystemSetting).where(SystemSetting.key == "server_public_url")
+                row = (await db.execute(stmt)).scalar_one_or_none()
+                if not row:
+                    row = SystemSetting(key="server_public_url", value=clean_url, description="URL pública base del servidor", is_secret=False)
+                    db.add(row)
+                else:
+                    row.value = clean_url
+
+        # 2. Google Client ID
+        if "google_client_id" in data and data["google_client_id"] is not None:
+            clean_client_id = str(data["google_client_id"]).strip()
+            stmt = select(SystemSetting).where(SystemSetting.key == "google_client_id")
+            row = (await db.execute(stmt)).scalar_one_or_none()
+            if not row:
+                row = SystemSetting(key="google_client_id", value=clean_client_id, description="Google OAuth 2.0 Client ID", is_secret=False)
+                db.add(row)
+            else:
+                row.value = clean_client_id
+
+        # 3. Google Client Secret (only update if provided and not masked)
+        if "google_client_secret" in data and data["google_client_secret"]:
+            raw_secret = str(data["google_client_secret"]).strip()
+            if not raw_secret.startswith("••"):
+                encrypted_val = encrypt_secret(raw_secret)
+                stmt = select(SystemSetting).where(SystemSetting.key == "google_client_secret")
+                row = (await db.execute(stmt)).scalar_one_or_none()
+                if not row:
+                    row = SystemSetting(key="google_client_secret", value=encrypted_val, description="Google OAuth 2.0 Client Secret", is_secret=True)
+                    db.add(row)
+                else:
+                    row.value = encrypted_val
+
+        await db.commit()
+        return await AdminService.get_system_settings(db)
+
+    @staticmethod
+    async def get_effective_google_config(db: Optional[AsyncSession] = None) -> Tuple[str, str, str]:
+        """
+        Returns (client_id, client_secret, redirect_uri) for Google OAuth.
+        Prefers database settings; falls back to environment configuration.
+        """
+        from app.core.config import settings
+        from app.core.security import decrypt_secret
+
+        client_id = settings.GOOGLE_CLIENT_ID
+        client_secret = settings.GOOGLE_CLIENT_SECRET
+        server_url = settings.SERVER_PUBLIC_URL or "http://localhost:5173"
+        redirect_uri = settings.GOOGLE_REDIRECT_URI
+
+        if db:
+            from app.domains.admin.models import SystemSetting
+            res = await db.execute(select(SystemSetting))
+            settings_rows = res.scalars().all()
+            settings_map = {row.key: row.value for row in settings_rows}
+
+            if settings_map.get("google_client_id"):
+                client_id = settings_map["google_client_id"]
+
+            if settings_map.get("google_client_secret"):
+                raw_secret = settings_map["google_client_secret"]
+                try:
+                    client_secret = decrypt_secret(raw_secret)
+                except Exception:
+                    client_secret = raw_secret
+
+            if settings_map.get("server_public_url"):
+                server_url = settings_map["server_public_url"].rstrip("/")
+                redirect_uri = f"{server_url}/integrations/google/callback"
+
+        return client_id, client_secret, redirect_uri
 

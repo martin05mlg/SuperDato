@@ -6,6 +6,8 @@ import type {
   RegistrationToken,
   RegistrationTokenCreate,
   SystemInfo,
+  SystemSettings,
+  UpdateSystemSettingsDto,
   User,
   Household,
 } from '../types';
@@ -70,6 +72,16 @@ export const adminApi = {
 
   revokeToken: async (tokenId: string): Promise<{ message: string }> => {
     const res = await apiClient.delete<{ message: string }>(`/admin/tokens/${tokenId}`);
+    return res.data;
+  },
+
+  getSettings: async (): Promise<SystemSettings> => {
+    const res = await apiClient.get<SystemSettings>('/admin/settings');
+    return res.data;
+  },
+
+  updateSettings: async (data: UpdateSystemSettingsDto): Promise<SystemSettings> => {
+    const res = await apiClient.patch<SystemSettings>('/admin/settings', data);
     return res.data;
   },
 };
