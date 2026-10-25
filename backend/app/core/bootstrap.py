@@ -177,3 +177,64 @@ async def ensure_system_secrets(session: AsyncSession) -> None:
         await session.commit()
         logger.info("Generada y asegurada nueva SECRET_KEY persistente en la base de datos.")
 
+
+async def heal_inconsistent_receipt_line_prices(session: AsyncSession) -> int:
+    """
+    Detects and automatically repairs corrupted unit prices on receipt lines and price observations
+    caused by product title numbers (e.g. Alcohol 96) being misparsed as unit prices.
+    """
+    from decimal import Decimal
+    from sqlalchemy import update
+    from app.domains.receipts.models import ReceiptLine
+    from app.domains.catalog.models import PriceObservation
+
+    stmt = select(ReceiptLine).where(
+        ReceiptLine.quantity > 0,
+        ReceiptLine.line_total > 0,
+    )
+    res = await session.execute(stmt)
+    lines = res.scalars().all()
+
+    healed_count = 0
+    for line in lines:
+        try:
+            qty = Decimal(str(line.quantity))
+            unit_p = Decimal(str(line.unit_price))
+            total = Decimal(str(line.line_total))
+            discount = Decimal(str(line.discount_amount or 0))
+
+            expected_unit_p = round((total + discount) / qty, 2)
+
+            # If mathematical difference is greater than 5 cents:
+            if abs(qty * unit_p - (total + discount)) > Decimal("0.05"):
+                old_unit_p = float(line.unit_price)
+                new_unit_p = float(expected_unit_p)
+                line.unit_price = new_unit_p
+
+                # Restore missing suffix in raw description if it was misparsed as price (e.g. Alcohol 96)
+                if "ALCOHOL ETILICO" in line.raw_description.upper() and (old_unit_p == 96.0 or old_unit_p == 70.0):
+                    suffix = " 96" if old_unit_p == 96.0 else " 70"
+                    if not line.raw_description.endswith(suffix):
+                        line.raw_description = f"{line.raw_description}{suffix}"
+
+                # Fix corresponding PriceObservation
+                obs_stmt = (
+                    update(PriceObservation)
+                    .where(PriceObservation.receipt_line_id == line.id)
+                    .values(unit_price=new_unit_p)
+                )
+                await session.execute(obs_stmt)
+                healed_count += 1
+                logger.info(
+                    f"[PriceHealer] Line {line.id} ('{line.raw_description}'): "
+                    f"unit_price repaired {old_unit_p}€ -> {new_unit_p}€ (total {float(total)}€)"
+                )
+        except Exception as e:
+            logger.warning(f"[PriceHealer] Error processing line {line.id}: {e}")
+
+    if healed_count > 0:
+        await session.commit()
+        logger.info(f"[PriceHealer] Successfully repaired {healed_count} receipt lines and price observations.")
+
+    return healed_count
+

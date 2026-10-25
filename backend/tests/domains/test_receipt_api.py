@@ -120,3 +120,135 @@ async def test_delete_receipt_and_prevent_sample_reseed(auth_client: AsyncClient
     assert del_res2.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_pdf_receipt_extractor_numeric_titles_parsing():
+    """
+    Verifies that product names containing numbers (e.g. Alcohol 96, Vino 2022)
+    are not erroneously parsed as unit prices.
+    """
+    from app.domains.receipts.extractor.pdf_parser import PDFReceiptExtractor
+
+    raw_ticket_text = """
+    MERCADONA, S.A. A-46103834
+    C/ TEST 123
+    50001 ZARAGOZA
+    FACTURA SIMPLIFICADA: 4534-012-123456
+    15/05/2026 18:30 OP: 999
+    
+    Descripción P. Unit Importe
+    1 ALCOHOL ETILICO 96 0,80
+    2 DEO ROLL-ON ALOE 0,90 1,80
+    2 ALCOHOL ETILICO 96 0,80 1,60
+    1 VINO TINTO COSECHA 2022 3,50
+    TOTAL (€) 7,70
+    TARJ. BANCARIA: **** **** **** 1234
+    """
+
+    data = PDFReceiptExtractor.extract_from_text(raw_ticket_text)
+    lines = data["lines"]
+    assert len(lines) == 4
+
+    # 1. Alcohol 96 single unit
+    assert lines[0]["raw_description"] == "ALCOHOL ETILICO 96"
+    assert lines[0]["quantity"] == 1.0
+    assert lines[0]["unit_price"] == 0.80
+    assert lines[0]["line_total"] == 0.80
+
+    # 2. Multi-unit deo
+    assert lines[1]["raw_description"] == "DEO ROLL-ON ALOE"
+    assert lines[1]["quantity"] == 2.0
+    assert lines[1]["unit_price"] == 0.90
+    assert lines[1]["line_total"] == 1.80
+
+    # 3. Multi-unit alcohol 96
+    assert lines[2]["raw_description"] == "ALCOHOL ETILICO 96"
+    assert lines[2]["quantity"] == 2.0
+    assert lines[2]["unit_price"] == 0.80
+    assert lines[2]["line_total"] == 1.60
+
+    # 4. Single unit vino 2022
+    assert lines[3]["raw_description"] == "VINO TINTO COSECHA 2022"
+    assert lines[3]["quantity"] == 1.0
+    assert lines[3]["unit_price"] == 3.50
+    assert lines[3]["line_total"] == 3.50
+
+
+@pytest.mark.asyncio
+async def test_heal_inconsistent_receipt_line_prices(db_session):
+    """
+    Verifies that the auto-healing routine repairs corrupt receipt lines
+    where quantity == 1 but unit_price was stored as 96.00 instead of 0.80.
+    """
+    import uuid
+    from datetime import date, datetime, timezone
+    from app.core.bootstrap import heal_inconsistent_receipt_line_prices
+    from app.domains.receipts.models import Receipt, ReceiptLine
+    from app.domains.catalog.models import Product, PriceObservation, Category
+    from app.domains.catalog.services import CatalogService
+
+    cats = await CatalogService.ensure_system_categories(db_session)
+
+    # Setup parent receipt
+    r_id = uuid.uuid4()
+    receipt = Receipt(
+        id=r_id,
+        invoice_number="9999-001-999999",
+        purchase_date=date(2025, 2, 28),
+        purchase_time="12:00",
+        purchase_datetime=datetime(2025, 2, 28, 12, 0, tzinfo=timezone.utc),
+        total_amount=0.80,
+        deduplication_hash="test-dedup-hash-heal",
+    )
+    db_session.add(receipt)
+
+    line_id = uuid.uuid4()
+    prod_id = uuid.uuid4()
+    prod = Product(
+        id=prod_id,
+        canonical_name="Alcohol Etilico 96",
+        category_id=cats["cuidado-personal-y-perfumeria"].id,
+        default_unit="ud",
+    )
+    db_session.add(prod)
+
+    # Corrupt line with 96.00 unit price and 0.80 total
+    corrupt_line = ReceiptLine(
+        id=line_id,
+        receipt_id=r_id,
+        line_order=1,
+        raw_description="ALCOHOL ETILICO",
+        product_id=prod_id,
+        quantity=1.0,
+        unit_price=96.00,  # Corrupt value!
+        line_total=0.80,
+        discount_amount=0.00,
+    )
+    db_session.add(corrupt_line)
+
+    obs = PriceObservation(
+        id=uuid.uuid4(),
+        product_id=prod_id,
+        receipt_line_id=line_id,
+        unit_price=96.00,  # Corrupt value!
+        observed_date=date(2025, 2, 28),
+        observed_at=datetime(2025, 2, 28, 12, 0, tzinfo=timezone.utc),
+        store_code="4534",
+    )
+    db_session.add(obs)
+    await db_session.commit()
+
+    # Run healer
+    healed = await heal_inconsistent_receipt_line_prices(db_session)
+    assert healed >= 1
+
+    # Verify line and observation were corrected
+    await db_session.refresh(corrupt_line)
+    await db_session.refresh(obs)
+
+    assert float(corrupt_line.unit_price) == 0.80
+    assert float(corrupt_line.line_total) == 0.80
+    assert corrupt_line.raw_description == "ALCOHOL ETILICO 96"
+    assert float(obs.unit_price) == 0.80
+
+
+

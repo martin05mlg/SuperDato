@@ -180,33 +180,36 @@ class PDFReceiptExtractor:
                     continue
 
                 # Caso D: Múltiples unidades estándar (Ej: 2 DEO ROLL-ON ALOE 0,90 1,80)
-                multi_match = re.search(r"^(\d+)\s+(.+?)\s+([\d,]+)\s+([\d,]+)$", line)
+                # En Mercadona, Cnt >= 2 y siempre se cumple matemáticamente Cnt * P.Unit == Importe
+                multi_match = re.search(r"^([2-9]|\d{2,})\s+(.+?)\s+(\d+[\.,]\d{2})\s+(\d+[\.,]\d{2})$", line)
                 if multi_match:
                     qty = int(multi_match.group(1))
-                    name = multi_match.group(2).strip()
                     unit_p = Decimal(multi_match.group(3).replace(",", "."))
                     line_total = Decimal(multi_match.group(4).replace(",", "."))
-                    items.append({
-                        "line_order": line_order,
-                        "raw_description": name,
-                        "product_name": name,
-                        "category_name": PDFReceiptExtractor._categorize(name),
-                        "quantity": float(qty),
-                        "unit_of_measure": "ud",
-                        "unit_price": float(unit_p),
-                        "discount_amount": 0.0,
-                        "line_total": float(line_total),
-                        "is_weighed_item": False,
-                        "weight_in_kg": None,
-                        "validation_status": "VALID",
-                        "is_manual_override": False,
-                    })
-                    line_order += 1
-                    i += 1
-                    continue
+                    # Validar coherencia matemática entre cantidad, precio unitario e importe total
+                    if abs(Decimal(qty) * unit_p - line_total) <= Decimal("0.05"):
+                        name = multi_match.group(2).strip()
+                        items.append({
+                            "line_order": line_order,
+                            "raw_description": name,
+                            "product_name": name,
+                            "category_name": PDFReceiptExtractor._categorize(name),
+                            "quantity": float(qty),
+                            "unit_of_measure": "ud",
+                            "unit_price": float(unit_p),
+                            "discount_amount": 0.0,
+                            "line_total": float(line_total),
+                            "is_weighed_item": False,
+                            "weight_in_kg": None,
+                            "validation_status": "VALID",
+                            "is_manual_override": False,
+                        })
+                        line_order += 1
+                        i += 1
+                        continue
 
-                # Caso E: Unidad individual estándar (Ej: 1 PIPA GIGANTE AGUASAL 1,10)
-                single_match = re.search(r"^1\s+(.+?)\s+([\d,]+)$", line)
+                # Caso E: Unidad individual estándar (Ej: 1 ALCOHOL ETILICO 96 0,80 o 1 PIPA GIGANTE 1,10)
+                single_match = re.search(r"^(?:1\s+)?(.+?)\s+([\d,]+)$", line)
                 if single_match:
                     name = single_match.group(1).strip()
                     line_total = Decimal(single_match.group(2).replace(",", "."))

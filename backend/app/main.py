@@ -34,10 +34,11 @@ async def lifespan(app: FastAPI):
         await run_migrations()
 
     async with async_session_maker() as session:
-        from app.core.bootstrap import ensure_superadmin, ensure_system_secrets
+        from app.core.bootstrap import ensure_superadmin, ensure_system_secrets, heal_inconsistent_receipt_line_prices
 
         await ensure_system_secrets(session)
         await ensure_superadmin(session)
+        await heal_inconsistent_receipt_line_prices(session)
 
     yield
     # Shutdown: Cleanly dispose of connection pools
