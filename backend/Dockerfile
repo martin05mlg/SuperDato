@@ -21,10 +21,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY . .
 
-# Create non-root user for security
-RUN addgroup --system --gid 1001 appgroup && \
+# Create non-root user for security and ensure data volume directory exists with correct permissions
+RUN mkdir -p /app/data && \
+    addgroup --system --gid 1001 appgroup && \
     adduser --system --uid 1001 --gid 1001 appuser && \
-    chown -R appuser:appgroup /app
+    chown -R appuser:appgroup /app && \
+    chmod -R 775 /app/data
+
+VOLUME /app/data
 
 USER appuser
 

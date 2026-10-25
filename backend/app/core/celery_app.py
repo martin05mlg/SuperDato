@@ -33,3 +33,30 @@ celery_app.autodiscover_tasks([
     "app.domains.receipts",
 ])
 
+
+try:
+    from celery.signals import worker_process_init
+
+    @worker_process_init.connect
+    def on_worker_init(**kwargs):
+        """Synchronizes system encryption secrets from database into worker process memory."""
+        import asyncio
+        from app.core.database import async_session_maker
+        from app.core.bootstrap import ensure_system_secrets
+
+        async def _init_secrets():
+            async with async_session_maker() as session:
+                await ensure_system_secrets(session)
+
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_init_secrets())
+        except Exception:
+            pass
+except Exception:
+    pass
+

@@ -34,8 +34,9 @@ async def lifespan(app: FastAPI):
         await run_migrations()
 
     async with async_session_maker() as session:
-        from app.core.bootstrap import ensure_superadmin
+        from app.core.bootstrap import ensure_superadmin, ensure_system_secrets
 
+        await ensure_system_secrets(session)
         await ensure_superadmin(session)
 
     yield

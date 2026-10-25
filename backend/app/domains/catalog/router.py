@@ -356,10 +356,14 @@ async def sync_mercadona_catalog(
     """Downloads official catalog hierarchy and products from Mercadona Online for a given postal code."""
     from app.core.config import settings
     if not settings.ENABLE_MERCADONA_ONLINE:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="La sincronización con el catálogo online está desactivada por defecto (ENABLE_MERCADONA_ONLINE=false).",
-        )
+        from app.domains.admin.models import SystemSetting
+        stmt = select(SystemSetting).where(SystemSetting.key == "enable_mercadona_online")
+        row = (await db.execute(stmt)).scalar_one_or_none()
+        if not (row and str(row.value).lower() in ("true", "1", "yes")):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="La sincronización con el catálogo online está desactivada (ENABLE_MERCADONA_ONLINE=false).",
+            )
     postal_code = data.postal_code if data else None
     limit = data.limit_subcategories if data else None
     wh_code = MercadonaStorefrontClient.resolve_warehouse_code(postal_code)

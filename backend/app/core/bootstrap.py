@@ -89,3 +89,91 @@ async def ensure_superadmin(session: AsyncSession) -> None:
     await session.commit()
     audit("superadmin_created", target=email, generated_password=False)
 
+
+async def ensure_system_secrets(session: AsyncSession) -> None:
+    """
+    Sincroniza y garantiza que las claves criptográficas críticas (ENCRYPTION_MASTER_KEY y SECRET_KEY)
+    queden permanentemente guardadas en PostgreSQL (tabla system_settings).
+    De este modo, NUNCA se pierden entre reinicios de contenedor ni reconstrucciones de Docker,
+    asegurando que el Google Client Secret y los tokens OAuth persistan indefinidamente.
+    """
+    import os
+    import secrets
+    from app.domains.admin.models import SystemSetting
+
+    # 1. ENCRYPTION_MASTER_KEY
+    env_master = os.getenv("ENCRYPTION_MASTER_KEY", "").strip()
+    stmt_enc = select(SystemSetting).where(SystemSetting.key == "_system_encryption_master_key")
+    enc_row = (await session.execute(stmt_enc)).scalar_one_or_none()
+
+    if env_master and len(env_master) >= 32:
+        settings.ENCRYPTION_MASTER_KEY = env_master
+        if not enc_row:
+            session.add(SystemSetting(
+                key="_system_encryption_master_key",
+                value=env_master,
+                description="Clave maestra persistente de cifrado Fernet",
+                is_secret=True,
+            ))
+            await session.commit()
+        elif enc_row.value != env_master:
+            enc_row.value = env_master
+            await session.commit()
+    elif enc_row and enc_row.value and len(enc_row.value) >= 32:
+        settings.ENCRYPTION_MASTER_KEY = enc_row.value
+        logger.info("ENCRYPTION_MASTER_KEY persistente cargada con éxito desde la base de datos.")
+    else:
+        key_val = settings.ENCRYPTION_MASTER_KEY
+        if not key_val or len(key_val) < 32:
+            key_val = secrets.token_urlsafe(32)
+        settings.ENCRYPTION_MASTER_KEY = key_val
+        if not enc_row:
+            session.add(SystemSetting(
+                key="_system_encryption_master_key",
+                value=key_val,
+                description="Clave maestra persistente de cifrado Fernet",
+                is_secret=True,
+            ))
+        else:
+            enc_row.value = key_val
+        await session.commit()
+        logger.info("Generada y asegurada nueva ENCRYPTION_MASTER_KEY persistente en la base de datos.")
+
+    # 2. SECRET_KEY
+    env_sec = os.getenv("SECRET_KEY", "").strip()
+    stmt_sec = select(SystemSetting).where(SystemSetting.key == "_system_jwt_secret_key")
+    sec_row = (await session.execute(stmt_sec)).scalar_one_or_none()
+
+    if env_sec and len(env_sec) >= 32:
+        settings.SECRET_KEY = env_sec
+        if not sec_row:
+            session.add(SystemSetting(
+                key="_system_jwt_secret_key",
+                value=env_sec,
+                description="Clave secreta persistente para tokens JWT",
+                is_secret=True,
+            ))
+            await session.commit()
+        elif sec_row.value != env_sec:
+            sec_row.value = env_sec
+            await session.commit()
+    elif sec_row and sec_row.value and len(sec_row.value) >= 32:
+        settings.SECRET_KEY = sec_row.value
+        logger.info("SECRET_KEY persistente cargada con éxito desde la base de datos.")
+    else:
+        sec_val = settings.SECRET_KEY
+        if not sec_val or len(sec_val) < 32:
+            sec_val = secrets.token_urlsafe(64)
+        settings.SECRET_KEY = sec_val
+        if not sec_row:
+            session.add(SystemSetting(
+                key="_system_jwt_secret_key",
+                value=sec_val,
+                description="Clave secreta persistente para tokens JWT",
+                is_secret=True,
+            ))
+        else:
+            sec_row.value = sec_val
+        await session.commit()
+        logger.info("Generada y asegurada nueva SECRET_KEY persistente en la base de datos.")
+

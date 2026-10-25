@@ -31,22 +31,25 @@ def _resolve_data_dir() -> Path:
 def _load_or_create_secrets() -> Tuple[str, str]:
     """
     Loads or generates persistent cryptographic secrets.
-    Saves to a shared .secrets.json file in the persistent data volume
+    Saves to a shared .secrets.json file across data directories or fallbacks (/app/data, /tmp)
     so all containers (API, Worker, Beat) share identical keys across restarts.
     """
     data_dir = _resolve_data_dir()
-    secrets_file = data_dir / ".secrets.json"
+    candidate_dirs = [data_dir, Path("/tmp"), Path.home()]
 
-    if secrets_file.exists():
-        try:
-            with open(secrets_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                s_key = data.get("secret_key")
-                e_key = data.get("encryption_master_key")
-                if s_key and e_key:
-                    return str(s_key), str(e_key)
-        except Exception:
-            pass
+    # First check if any existing secrets file exists
+    for c_dir in candidate_dirs:
+        secrets_file = c_dir / ".secrets.json"
+        if secrets_file.exists():
+            try:
+                with open(secrets_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    s_key = data.get("secret_key")
+                    e_key = data.get("encryption_master_key")
+                    if s_key and e_key:
+                        return str(s_key), str(e_key)
+            except Exception:
+                pass
 
     sec_key = secrets.token_urlsafe(64)
     enc_key = secrets.token_urlsafe(32)
@@ -54,24 +57,25 @@ def _load_or_create_secrets() -> Tuple[str, str]:
         "secret_key": sec_key,
         "encryption_master_key": enc_key,
     }
-    try:
-        temp_file = data_dir / f".secrets.tmp.{os.getpid()}"
-        fd = os.open(temp_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
-        os.replace(temp_file, secrets_file)
+
+    # Attempt to persist to the first writable directory
+    for c_dir in candidate_dirs:
         try:
-            os.chmod(secrets_file, 0o600)
-        except OSError:
-            pass
-    except Exception:
-        if secrets_file.exists():
+            c_dir.mkdir(parents=True, exist_ok=True)
+            secrets_file = c_dir / ".secrets.json"
+            temp_file = c_dir / f".secrets.tmp.{os.getpid()}"
+            fd = os.open(temp_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            os.replace(temp_file, secrets_file)
             try:
-                with open(secrets_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return str(data.get("secret_key", sec_key)), str(data.get("encryption_master_key", enc_key))
-            except Exception:
+                os.chmod(secrets_file, 0o600)
+            except OSError:
                 pass
+            return sec_key, enc_key
+        except Exception:
+            continue
+
     return sec_key, enc_key
 
 
@@ -103,7 +107,7 @@ class Settings(BaseSettings):
     ENABLE_DOCS: bool = False  # Swagger/OpenAPI: siempre activo fuera de producción; en producción solo si True
     RATE_LIMIT_ENABLED: bool = True
     AUTO_MIGRATE: bool = True  # Ejecuta `alembic upgrade head` al arrancar la API
-    ENABLE_MERCADONA_ONLINE: bool = False  # Enriquecimiento opt-in vía tienda.mercadona.es (API no oficial)
+    ENABLE_MERCADONA_ONLINE: bool = True  # Enriquecimiento del catálogo vía API pública de tienda.mercadona.es
 
     # Database
     # Default to local postgresql+asyncpg, or sqlite+aiosqlite for local tests without postgres

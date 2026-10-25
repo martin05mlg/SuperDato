@@ -314,6 +314,9 @@ class AdminService:
         from app.core.config import settings
         from app.domains.admin.models import SystemSetting
         from app.core.security import decrypt_secret
+        from app.core.bootstrap import ensure_system_secrets
+
+        await ensure_system_secrets(db)
 
         res = await db.execute(select(SystemSetting))
         settings_rows = res.scalars().all()
@@ -362,6 +365,9 @@ class AdminService:
         """Persists updated system settings."""
         from app.domains.admin.models import SystemSetting
         from app.core.security import encrypt_secret
+        from app.core.bootstrap import ensure_system_secrets
+
+        await ensure_system_secrets(db)
 
         # 1. Server Public URL
         if "server_public_url" in data and data["server_public_url"] is not None:
@@ -418,6 +424,9 @@ class AdminService:
 
         if db:
             from app.domains.admin.models import SystemSetting
+            from app.core.bootstrap import ensure_system_secrets
+            await ensure_system_secrets(db)
+
             res = await db.execute(select(SystemSetting))
             settings_rows = res.scalars().all()
             settings_map = {row.key: row.value for row in settings_rows}
