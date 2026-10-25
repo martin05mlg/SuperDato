@@ -264,7 +264,10 @@ class MercadonaMatcherService:
 
         stmt = (
             select(Product)
-            .where(Product.enrichment_status != "MANUALLY_CONFIRMED")
+            .where(
+                (Product.enrichment_status.notin_(["MANUALLY_CONFIRMED", "REJECTED"]))
+                | (Product.enrichment_status.is_(None))
+            )
             .options(selectinload(Product.aliases), selectinload(Product.price_observations))
         )
         res = await db.execute(stmt)
