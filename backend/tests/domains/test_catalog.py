@@ -384,4 +384,84 @@ async def test_intelligent_categorizer_and_persistence(auth_client: AsyncClient,
     assert resolved_prod.category_id == cat["platos-preparados"].id
 
 
+@pytest.mark.asyncio
+async def test_mercadona_preview_and_decimal_id_recognition(
+    db_session: AsyncSession, auth_client: AsyncClient, monkeypatch
+):
+    """
+    Verifies that Mercadona products with decimal IDs (e.g. 11632.1) and
+    wh-independent preview products (e.g. 13934 Ambar) are correctly parsed,
+    fetched, categorized, and linked.
+    """
+    from app.domains.catalog.categorizer import classify_product
+    from app.domains.catalog.matcher import token_similarity
+    from app.domains.catalog.mercadona_client import MercadonaStorefrontClient
+
+    # 1. Categorization accuracy
+    assert classify_product("Cerveza triple zero Ambar tostada") == "bebidas-y-refrescos"
+    assert classify_product("Pan integral de trigo 100%") == "panaderia-y-pasteleria"
+
+    # 2. Brand detection
+    assert MercadonaStorefrontClient.extract_brand("Cerveza triple zero Ambar tostada") == "Ambar"
+
+    # 3. Matcher token similarity
+    sim_beer = token_similarity("CERV AMBAR TRIPLE 0% TOSTADA", "Cerveza triple zero Ambar tostada botellin")
+    assert sim_beer >= 0.85
+
+    sim_bread = token_similarity("PAN TRIGO 100% INT", "Pan integral de trigo 100%")
+    assert sim_bread >= 0.85
+
+    # 4. Ensure categories exist
+    cats = await CatalogService.ensure_system_categories(db_session)
+
+    # 5. Create local test product
+    test_prod = Product(
+        id=uuid.uuid4(),
+        canonical_name="Cerveza Tostada Ambar 0,0",
+        category_id=cats["otros"].id,
+        default_unit="ud",
+    )
+    db_session.add(test_prod)
+    await db_session.commit()
+
+    # 6. Test confirm-match with URL containing 13934
+    res_confirm = await auth_client.post(
+        "/api/v1/catalog/mercadona/confirm-match",
+        json={
+            "product_id": str(test_prod.id),
+            "url_or_id": "https://tienda.mercadona.es/product/13934/cerveza-triple-zero-ambar-tostada-botellin",
+        },
+    )
+    assert res_confirm.status_code == 200
+    data = res_confirm.json()
+    assert data["mercadona_online_id"] == "13934"
+    assert "Ambar" in data["enriched_name"]
+    assert data["brand"] == "Ambar"
+    assert data["enrichment_status"] == "MANUALLY_CONFIRMED"
+
+    # 7. Test confirm-match with decimal ID URL (11632.1)
+    test_bread = Product(
+        id=uuid.uuid4(),
+        canonical_name="Pan Integral Trigo",
+        category_id=cats["otros"].id,
+        default_unit="ud",
+    )
+    db_session.add(test_bread)
+    await db_session.commit()
+
+    res_bread = await auth_client.post(
+        "/api/v1/catalog/mercadona/confirm-match",
+        json={
+            "product_id": str(test_bread.id),
+            "url_or_id": "https://tienda.mercadona.es/product/11632.1/pan-integral-trigo-100",
+        },
+    )
+    assert res_bread.status_code == 200
+    bread_data = res_bread.json()
+    assert bread_data["mercadona_online_id"] == "11632.1"
+    assert "Pan integral" in bread_data["enriched_name"]
+    assert bread_data["enrichment_status"] == "MANUALLY_CONFIRMED"
+
+
+
 

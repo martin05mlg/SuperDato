@@ -64,6 +64,8 @@ class MercadonaStorefrontClient:
             return "Compy"
         elif "baby seco" in name_lower or "deliplus baby" in name_lower:
             return "Deliplus"
+        elif "ambar" in name_lower:
+            return "Ambar"
         return None
 
     @classmethod
@@ -128,6 +130,17 @@ class MercadonaStorefrontClient:
                     logger.debug(f"Warehouse {wh} failed for product {clean_id}: {e}")
                     continue
 
+            # Fallback to Mercadona universal public preview endpoint (wh-independent)
+            if not p:
+                preview_url = f"{MERCADONA_API_BASE}/products/{clean_id}/preview/"
+                try:
+                    resp = await client.get(preview_url)
+                    if resp.status_code == 200:
+                        p = resp.json()
+                        used_wh = "preview"
+                except Exception as e:
+                    logger.debug(f"Preview fetch failed for product {clean_id}: {e}")
+
         if not p:
             return None
 
@@ -136,7 +149,7 @@ class MercadonaStorefrontClient:
             if not display_name:
                 return None
 
-            price_info = p.get("price_instructions", {})
+            price_info = p.get("price_instructions") or {}
             unit_p = None
             if price_info.get("unit_price"):
                 try:
@@ -158,18 +171,42 @@ class MercadonaStorefrontClient:
             res = await db.execute(existing_stmt)
             existing = res.scalar_one_or_none()
 
-            share_url = p.get("share_url") or f"https://tienda.mercadona.es/product/{clean_id}"
+            slug = p.get("slug", "")
+            share_url = p.get("share_url") or (f"https://tienda.mercadona.es/product/{clean_id}/{slug}" if slug else f"https://tienda.mercadona.es/product/{clean_id}")
+            thumbnail_url = p.get("thumbnail") or p.get("photo") or ""
+            packaging = p.get("packaging")
+
+            # Infer packaging if missing
+            if not packaging and slug:
+                for pack_candidate in ["botellin", "botellines", "lata", "latas", "botella", "botellas", "pack-6", "pack-12", "paquete", "bolsa"]:
+                    if pack_candidate in slug.lower():
+                        packaging = pack_candidate.capitalize()
+                        break
+
+            # Infer category path if fetched via preview
+            category_path = p.get("_category_name") or "Catálogo General"
+            if used_wh == "preview":
+                from app.domains.catalog.categorizer import classify_product, MERCADONA_TOP_CATEGORY_MAP
+                slug_cat = classify_product(display_name, [])
+                rev_map = {v: k for k, v in MERCADONA_TOP_CATEGORY_MAP.items()}
+                cat_desc = rev_map.get(slug_cat, "Catálogo General")
+                category_path = f"{cat_desc} > Directo"
 
             if existing:
                 existing.display_name = display_name
-                existing.slug = p.get("slug", "")
+                existing.slug = slug
                 existing.brand = brand
-                existing.packaging = p.get("packaging")
-                existing.thumbnail_url = p.get("thumbnail", "")
+                existing.packaging = packaging or existing.packaging
+                existing.thumbnail_url = thumbnail_url or existing.thumbnail_url
                 existing.share_url = share_url
-                existing.unit_price = unit_p
-                existing.reference_price = ref_p
-                existing.reference_format = price_info.get("reference_format")
+                if unit_p is not None:
+                    existing.unit_price = unit_p
+                if ref_p is not None:
+                    existing.reference_price = ref_p
+                if price_info.get("reference_format"):
+                    existing.reference_format = price_info.get("reference_format")
+                if category_path and category_path != "Catálogo General":
+                    existing.category_path = category_path
                 existing.warehouse_code = used_wh
                 existing.raw_payload = p
                 existing.last_synced_at = now
@@ -178,15 +215,15 @@ class MercadonaStorefrontClient:
                 m_prod = MercadonaOnlineProduct(
                     id=clean_id,
                     display_name=display_name,
-                    slug=p.get("slug", ""),
+                    slug=slug,
                     brand=brand,
-                    packaging=p.get("packaging"),
-                    thumbnail_url=p.get("thumbnail", ""),
+                    packaging=packaging,
+                    thumbnail_url=thumbnail_url,
                     share_url=share_url,
                     unit_price=unit_p,
                     reference_price=ref_p,
                     reference_format=price_info.get("reference_format"),
-                    category_path="Búsqueda Directa",
+                    category_path=category_path,
                     warehouse_code=used_wh,
                     raw_payload=p,
                     last_synced_at=now,
@@ -195,6 +232,14 @@ class MercadonaStorefrontClient:
 
             await db.commit()
             await db.refresh(m_prod)
+
+            # Invalidate matcher cache so new item is immediately recognized
+            try:
+                from app.domains.catalog.matcher import MercadonaMatcherService
+                MercadonaMatcherService.invalidate_cache()
+            except Exception:
+                pass
+
             return m_prod
         except Exception as e:
             logger.warning(f"Error saving product {clean_id} directly from Mercadona: {e}")

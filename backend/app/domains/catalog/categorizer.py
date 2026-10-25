@@ -77,15 +77,16 @@ CATEGORY_KEYWORDS: List[tuple[List[str], str]] = [
         ],
         "lacteos-y-huevos",
     ),
-    # Panadería y Pastelería
+    # Bebidas y Refrescos
     (
         [
-            "pan", "barra", "integral", "tostadas", "molde", "croissant", "galletas",
-            "magdalenas", "bollo", "picos", "reganas", "colines", "napolitana", "bizcocho",
-            "harina", "masa", "panecillo", "hogaza", "chapata", "baguette", "cruasan",
-            "palmera", "donuts", "rosquillas", "tostada", "crackers"
+            "agua", "vino", "cerveza", "cerv", "c s gluten", "s gluten", "refresco", "cola", "fanta", "nestea",
+            "fuze", "tea", "zumo", "sidra", "ginebra", "ron", "whisky", "vodka",
+            "licor", "tonica", "gaseosa", "bebida", "fontabil", "fontebil", "font", "font vella", "cortes",
+            "radler", "shandy", "isotonico", "aquarius", "red bull", "monster", "ambar", "botellin",
+            "botellines", "triple zero", "sin alcohol", "cerveza tostada"
         ],
-        "panaderia-y-pasteleria",
+        "bebidas-y-refrescos",
     ),
     # Frutas y Verduras
     (
@@ -101,15 +102,15 @@ CATEGORY_KEYWORDS: List[tuple[List[str], str]] = [
         ],
         "frutas-y-verduras",
     ),
-    # Bebidas y Refrescos
+    # Panadería y Pastelería
     (
         [
-            "agua", "vino", "cerveza", "cerv", "c s gluten", "s gluten", "refresco", "cola", "fanta", "nestea",
-            "fuze", "tea", "zumo", "sidra", "ginebra", "ron", "whisky", "vodka",
-            "licor", "tonica", "gaseosa", "bebida", "fontabil", "fontebil", "font", "font vella", "cortes",
-            "radler", "shandy", "isotonico", "aquarius", "red bull", "monster"
+            "pan", "barra", "integral", "tostadas", "pan tostado", "biscotes", "molde", "croissant", "galletas",
+            "magdalenas", "bollo", "picos", "reganas", "colines", "napolitana", "bizcocho",
+            "harina", "masa", "panecillo", "panecillo tostado", "hogaza", "chapata", "baguette", "cruasan",
+            "palmera", "donuts", "rosquillas", "crackers"
         ],
-        "bebidas-y-refrescos",
+        "panaderia-y-pasteleria",
     ),
     # Platos Preparados
     (

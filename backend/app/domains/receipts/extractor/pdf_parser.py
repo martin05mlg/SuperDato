@@ -305,8 +305,10 @@ class PDFReceiptExtractor:
             return "Lácteos y Quesos"
         elif any(w in name_lower for w in ["pizza", "croqueta", "ensaladilla", "tortillas", "tiburon", "dochi"]):
             return "Platos Preparados"
-        elif any(w in name_lower for w in ["agua", "fontébil", "caldo", "refresco"]):
+        elif any(w in name_lower for w in ["cerveza", "cerv", "vino", "ambar", "agua", "fontébil", "caldo", "refresco"]):
             return "Bebidas"
+        elif any(w in name_lower for w in ["pan", "barra", "panecillo", "integral", "molde", "croissant", "galleta"]):
+            return "Panadería y Pastelería"
         elif any(w in name_lower for w in ["deo", "aloe", "manos", "ojos", "gel", "champu"]):
             return "Cuidado Personal"
         elif any(w in name_lower for w in ["pipa", "snack", "nachos", "patatas", "obleas"]):

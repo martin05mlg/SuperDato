@@ -1,3 +1,4 @@
+import re
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -469,11 +470,11 @@ async def confirm_match(
         target_online_id = data.mercadona_online_id.strip()
     elif data.url_or_id and data.url_or_id.strip():
         raw_val = data.url_or_id.strip()
-        url_match = re.search(r"/product/(\d+)", raw_val)
+        url_match = re.search(r"/product/([0-9]+(?:\.[0-9]+)?)", raw_val)
         if url_match:
             target_online_id = url_match.group(1)
         else:
-            digit_match = re.search(r"(\d{3,8})", raw_val)
+            digit_match = re.search(r"([0-9]{3,8}(?:\.[0-9]+)?)", raw_val)
             if digit_match:
                 target_online_id = digit_match.group(1)
 
@@ -613,9 +614,22 @@ async def search_mercadona_online(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Searches the local snapshot of Mercadona Online products."""
-    search_term = f"%{query.strip().lower()}%"
-    norm = normalize_string(query)
+    """Searches the local snapshot of Mercadona Online products, fetching from Mercadona API if ID/URL provided."""
+    raw_q = query.strip()
+    url_match = re.search(r"/product/([0-9]+(?:\.[0-9]+)?)", raw_q)
+    direct_id = url_match.group(1) if url_match else (raw_q if re.match(r"^[0-9]{3,8}(?:\.[0-9]+)?$", raw_q) else None)
+
+    if direct_id:
+        direct_stmt = select(MercadonaOnlineProduct).where(MercadonaOnlineProduct.id == direct_id)
+        direct_res = await db.execute(direct_stmt)
+        found = direct_res.scalar_one_or_none()
+        if not found:
+            found = await MercadonaStorefrontClient.fetch_and_save_product_by_id(db, direct_id)
+        if found:
+            return [found]
+
+    search_term = f"%{raw_q.lower()}%"
+    norm = normalize_string(raw_q)
     normalized_term = f"%{norm}%" if norm else search_term
     slug_term = f"%{norm.replace(' ', '-')}%" if norm else search_term
 

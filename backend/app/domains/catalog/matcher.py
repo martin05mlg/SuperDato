@@ -46,6 +46,16 @@ ABBREVIATIONS: Dict[str, str] = {
     "champi": "champinon",
     "desca": "descafeinado",
     "int": "integral",
+    "integ": "integral",
+    "trig": "trigo",
+    "cerv": "cerveza",
+    "cer": "cerveza",
+    "bot": "botellin",
+    "botell": "botellin",
+    "tost": "tostada",
+    "b/pan": "barra pan",
+    "zero": "0",
+    "cero": "0",
     "r/anchoa": "rellenas anchoa",
 }
 
@@ -61,6 +71,8 @@ def normalize_string(text: str) -> str:
     nfkd = unicodedata.normalize("NFKD", text)
     cleaned = "".join([c for c in nfkd if not unicodedata.combining(c)])
     cleaned = cleaned.lower()
+    cleaned = re.sub(r"\b0[,\.]0\b", " 0 ", cleaned)
+    cleaned = re.sub(r"\b0%\b", " 0 ", cleaned)
     cleaned = re.sub(r"[^\w\s]", " ", cleaned)
     tokens = [w.strip() for w in cleaned.split() if w.strip()]
 
