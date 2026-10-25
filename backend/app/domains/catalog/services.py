@@ -247,7 +247,7 @@ class CatalogService:
         category_id: Optional[str] = None,
         search: Optional[str] = None,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Lists canonical products with latest observed prices scoped to the given household."""
         from app.domains.catalog.models import PriceObservation
@@ -280,7 +280,11 @@ class CatalogService:
                 )
             )
 
-        stmt = stmt.offset(skip).limit(limit)
+        if skip > 0:
+            stmt = stmt.offset(skip)
+        if limit is not None and limit > 0:
+            stmt = stmt.limit(limit)
+
         result = await db.execute(stmt)
         products = result.scalars().all()
 

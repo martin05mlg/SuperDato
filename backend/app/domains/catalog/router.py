@@ -159,7 +159,7 @@ async def list_products(
     category_id: Optional[str] = Query(None, description="Filtrar por ID de categoría"),
     search: Optional[str] = Query(None, description="Búsqueda por nombre de producto o alias"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: Optional[int] = Query(None, ge=1, le=10000, description="Límite opcional de productos a retornar (por defecto sin límite)"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

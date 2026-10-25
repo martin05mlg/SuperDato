@@ -289,6 +289,10 @@ export const ProductsPage: React.FC = () => {
     return list;
   }, [products, sortField, sortDirection, enrichmentFilter]);
 
+  const totalCatalogProducts = React.useMemo(() => {
+    return categories.reduce((acc, c) => acc + (c.product_count || 0), 0);
+  }, [categories]);
+
   const totalObservations = products.reduce((acc, p) => acc + (p.observations_count || 0), 0);
   const enrichedCount = products.filter((p) => p.image_url || p.mercadona_online_id).length;
 
@@ -339,8 +343,17 @@ export const ProductsPage: React.FC = () => {
             <Package className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Productos Normalizados</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{products.length}</h3>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              {selectedCategory || searchTerm ? 'Productos Filtrados' : 'Productos Normalizados'}
+            </p>
+            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
+              {products.length}
+              {(selectedCategory || searchTerm) && totalCatalogProducts > 0 && (
+                <span className="text-xs font-normal text-slate-400 ml-1.5">
+                  / {totalCatalogProducts}
+                </span>
+              )}
+            </h3>
           </div>
         </div>
 
@@ -446,7 +459,7 @@ export const ProductsPage: React.FC = () => {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Todas las categorías
+            Todas las categorías {totalCatalogProducts > 0 && `(${totalCatalogProducts})`}
           </button>
           {categories.map((cat) => (
             <button

@@ -463,5 +463,41 @@ async def test_mercadona_preview_and_decimal_id_recognition(
     assert bread_data["enrichment_status"] == "MANUALLY_CONFIRMED"
 
 
+@pytest.mark.asyncio
+async def test_list_products_returns_all_without_limit(auth_client: AsyncClient, db_session):
+    """
+    Verifies that GET /api/v1/catalog/products does not truncate at 100 products
+    when no limit is passed, but respects limit when specified.
+    """
+    from app.domains.catalog.models import Product
+    from app.domains.catalog.services import CatalogService
+
+    cats = await CatalogService.ensure_system_categories(db_session)
+    cat_id = cats["otros"].id
+
+    # Create 115 products
+    for i in range(115):
+        p = Product(
+            id=uuid.uuid4(),
+            canonical_name=f"Bulk Product {i:03d}",
+            category_id=cat_id,
+            default_unit="ud",
+        )
+        db_session.add(p)
+    await db_session.commit()
+
+    # Query with default (no limit)
+    res_all = await auth_client.get("/api/v1/catalog/products")
+    assert res_all.status_code == 200
+    products_all = res_all.json()
+    assert len(products_all) >= 115
+
+    # Query with limit=10
+    res_limited = await auth_client.get("/api/v1/catalog/products?limit=10")
+    assert res_limited.status_code == 200
+    assert len(res_limited.json()) == 10
+
+
+
 
 
