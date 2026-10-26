@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -11,6 +12,8 @@ from app.domains.integrations.client import GoogleOAuthClient
 from app.domains.integrations.models import GoogleAccountConnection, ImportJob
 from app.domains.receipts.extractor.pdf_parser import PDFReceiptExtractor
 from app.domains.receipts.services import ReceiptService
+
+logger = logging.getLogger("superdato.integrations.tasks")
 
 
 def run_async(coro):
