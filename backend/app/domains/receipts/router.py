@@ -131,7 +131,7 @@ async def get_pending_receipts(
     current_user: User = Depends(get_current_user),
 ):
     """Returns all receipts waiting to be assigned to a household for the current user."""
-    return await ReceiptService.get_pending_receipts(db, current_user.id)
+    return await ReceiptService.get_pending_receipts(db, current_user.id, is_superuser=current_user.is_superuser)
 
 
 @router.get("/pending-count")
@@ -140,7 +140,7 @@ async def get_pending_count(
     current_user: User = Depends(get_current_user),
 ):
     """Returns count of unassigned receipts for the current user."""
-    count = await ReceiptService.get_pending_count(db, current_user.id)
+    count = await ReceiptService.get_pending_count(db, current_user.id, is_superuser=current_user.is_superuser)
     return {"count": count}
 
 

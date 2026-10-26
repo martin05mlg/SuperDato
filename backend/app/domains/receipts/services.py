@@ -373,7 +373,7 @@ class ReceiptService:
             "id": str(r.id),
             "household_id": str(r.household_id) if r.household_id else None,
             "imported_by_user_id": str(r.imported_by_user_id) if getattr(r, "imported_by_user_id", None) else None,
-            "imported_by_name": r.imported_by_user.full_name if getattr(r, "imported_by_user", None) else None,
+            "imported_by_name": r.imported_by_user.full_name if ("imported_by_user" in r.__dict__ and r.imported_by_user) else None,
             "company_name": r.company_name,
             "company_cif": r.company_cif,
             "store_address": r.store_address,
@@ -390,7 +390,7 @@ class ReceiptService:
             "assignment_status": getattr(r, "assignment_status", "ASSIGNED") or "ASSIGNED",
             "extraction_warnings": r.extraction_warnings or [],
             "is_manual_override": r.is_manual_override,
-            "lines_count": len(r.lines) if hasattr(r, "lines") and r.lines is not None else 0,
+            "lines_count": len(r.lines) if ("lines" in r.__dict__ and r.lines is not None) else 0,
             "created_at": r.created_at.isoformat() if getattr(r, "created_at", None) else (r.purchase_datetime.isoformat() if r.purchase_datetime else ""),
         }
 
@@ -1030,29 +1030,39 @@ class ReceiptService:
         return points
 
     @staticmethod
-    async def get_pending_receipts(db: AsyncSession, user_id: uuid.UUID) -> List[Dict]:
+    async def get_pending_receipts(db: AsyncSession, user_id: uuid.UUID, is_superuser: bool = False) -> List[Dict]:
         """Returns all receipts waiting to be assigned to a household."""
+        from sqlalchemy.orm import selectinload
         stmt = (
             select(Receipt)
-            .where(
-                (Receipt.imported_by_user_id == user_id) | (Receipt.imported_by_user_id.is_(None)),
-                (Receipt.assignment_status == "PENDING_ASSIGNMENT") | (Receipt.household_id.is_(None)),
+            .options(
+                selectinload(Receipt.lines),
+                selectinload(Receipt.tax_lines),
+                selectinload(Receipt.imported_by_user),
             )
             .order_by(Receipt.purchase_datetime.desc())
+        )
+        if not is_superuser:
+            stmt = stmt.where(
+                (Receipt.imported_by_user_id == user_id) | (Receipt.imported_by_user_id.is_(None)),
+            )
+        stmt = stmt.where(
+            (Receipt.assignment_status == "PENDING_ASSIGNMENT") | (Receipt.household_id.is_(None)),
         )
         res = await db.execute(stmt)
         receipts = res.scalars().all()
         return [ReceiptService._receipt_to_dict(r) for r in receipts]
 
     @staticmethod
-    async def get_pending_count(db: AsyncSession, user_id: uuid.UUID) -> int:
+    async def get_pending_count(db: AsyncSession, user_id: uuid.UUID, is_superuser: bool = False) -> int:
         """Returns the number of unassigned receipts for the user."""
-        stmt = (
-            select(func.count(Receipt.id))
-            .where(
+        stmt = select(func.count(Receipt.id))
+        if not is_superuser:
+            stmt = stmt.where(
                 (Receipt.imported_by_user_id == user_id) | (Receipt.imported_by_user_id.is_(None)),
-                (Receipt.assignment_status == "PENDING_ASSIGNMENT") | (Receipt.household_id.is_(None)),
             )
+        stmt = stmt.where(
+            (Receipt.assignment_status == "PENDING_ASSIGNMENT") | (Receipt.household_id.is_(None)),
         )
         return (await db.execute(stmt)).scalar_one() or 0
 

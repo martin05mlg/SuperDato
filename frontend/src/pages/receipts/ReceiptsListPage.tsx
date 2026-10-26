@@ -201,7 +201,7 @@ export const ReceiptsListPage: React.FC = () => {
   const filteredReceipts = currentList.filter((r) => {
     const term = searchTerm.toLowerCase();
     return (
-      r.invoice_number.toLowerCase().includes(term) ||
+      (r.invoice_number && r.invoice_number.toLowerCase().includes(term)) ||
       (r.store_address && r.store_address.toLowerCase().includes(term)) ||
       (r.store_city && r.store_city.toLowerCase().includes(term))
     );

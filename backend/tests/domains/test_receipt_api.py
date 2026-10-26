@@ -251,4 +251,40 @@ async def test_heal_inconsistent_receipt_line_prices(db_session):
     assert float(obs.unit_price) == 0.80
 
 
+@pytest.mark.asyncio
+async def test_pending_receipts_endpoints_and_serialization(auth_client: AsyncClient, db_session):
+    """
+    Verifies that /receipts/pending and /receipts/pending-count serialize pending receipts
+    properly without MissingGreenlet or serialization errors.
+    """
+    import uuid
+    from datetime import date, datetime, timezone
+    from app.domains.receipts.models import Receipt
+
+    r_id = uuid.uuid4()
+    receipt = Receipt(
+        id=r_id,
+        invoice_number="PENDING-001",
+        purchase_date=date(2026, 10, 26),
+        purchase_time="14:30",
+        purchase_datetime=datetime(2026, 10, 26, 14, 30, tzinfo=timezone.utc),
+        total_amount=15.50,
+        deduplication_hash="test-pending-hash-1",
+        household_id=None,
+        assignment_status="PENDING_ASSIGNMENT",
+    )
+    db_session.add(receipt)
+    await db_session.commit()
+
+    count_res = await auth_client.get("/api/v1/receipts/pending-count")
+    assert count_res.status_code == 200
+    assert count_res.json()["count"] >= 1
+
+    list_res = await auth_client.get("/api/v1/receipts/pending")
+    assert list_res.status_code == 200
+    pending_items = list_res.json()
+    assert any(item["id"] == str(r_id) for item in pending_items)
+
+
+
 
