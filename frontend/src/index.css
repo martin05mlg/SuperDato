@@ -15,4 +15,15 @@ body {
   min-height: 100vh;
   background-color: #f8fafc;
   color: #0f172a;
+  -webkit-tap-highlight-color: transparent;
 }
+
+/* Hide scrollbars for clean mobile touch carousel / tabs */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

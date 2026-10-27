@@ -308,12 +308,12 @@ export const ShoppingListPage: React.FC = () => {
             <span>Añadir Producto a la Lista</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 relative">
+          <div className="grid grid-cols-12 gap-2 sm:gap-3 relative">
             {/* Search Input with autocomplete */}
-            <div className="sm:col-span-7 relative">
+            <div className="col-span-12 sm:col-span-7 relative">
               <input
                 type="text"
-                placeholder="Buscar en catálogo Mercadona o escribir libremente..."
+                placeholder="Buscar producto o escribir libre..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 required
@@ -372,23 +372,23 @@ export const ShoppingListPage: React.FC = () => {
             </div>
 
             {/* Quantity */}
-            <div className="sm:col-span-2">
+            <div className="col-span-4 sm:col-span-2">
               <input
                 type="number"
                 step="0.5"
                 min="0.1"
                 value={newItemQty}
                 onChange={(e) => setNewItemQty(parseFloat(e.target.value) || 1)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-center font-bold text-slate-800"
+                className="w-full px-2 sm:px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-center font-bold text-slate-800"
               />
             </div>
 
             {/* Unit */}
-            <div className="sm:col-span-1">
+            <div className="col-span-3 sm:col-span-1">
               <select
                 value={newItemUnit}
                 onChange={(e) => setNewItemUnit(e.target.value)}
-                className="w-full px-2 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-semibold text-slate-700"
+                className="w-full px-1.5 sm:px-2 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-semibold text-slate-700"
               >
                 <option value="ud">ud</option>
                 <option value="kg">kg</option>
@@ -398,7 +398,7 @@ export const ShoppingListPage: React.FC = () => {
             </div>
 
             {/* Submit Button */}
-            <div className="sm:col-span-2">
+            <div className="col-span-5 sm:col-span-2">
               <button
                 type="submit"
                 disabled={isAdding || !newItemName.trim()}

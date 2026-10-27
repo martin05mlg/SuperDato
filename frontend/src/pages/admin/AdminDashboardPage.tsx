@@ -416,10 +416,10 @@ export const AdminDashboardPage: React.FC = () => {
       </div>
 
       {/* Tabs Switcher */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('tokens')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 whitespace-nowrap ${
             activeTab === 'tokens'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -431,7 +431,7 @@ export const AdminDashboardPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('users')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 whitespace-nowrap ${
             activeTab === 'users'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -443,7 +443,7 @@ export const AdminDashboardPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('households')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 whitespace-nowrap ${
             activeTab === 'households'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -455,7 +455,7 @@ export const AdminDashboardPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('oauth')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 whitespace-nowrap ${
             activeTab === 'oauth'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -467,7 +467,7 @@ export const AdminDashboardPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('system')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition shrink-0 whitespace-nowrap ${
             activeTab === 'system'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'

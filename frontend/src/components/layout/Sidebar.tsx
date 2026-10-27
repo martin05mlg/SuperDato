@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { receiptsApi } from '../../api/receipts.api';
 import {
   LayoutDashboard,
   Receipt,
@@ -24,28 +26,45 @@ const navItems = [
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
 
+  const { data: pendingData } = useQuery({
+    queryKey: ['pending-receipts-count'],
+    queryFn: receiptsApi.getPendingCount,
+    refetchInterval: 15000,
+  });
+  const pendingCount = pendingData?.count || 0;
+
   return (
     <aside className="w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-4rem)] p-4 hidden md:flex flex-col justify-between">
       <nav className="space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
+          const isReceipts = item.to === '/receipts';
+
           return (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex items-center space-x-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+                `flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-colors ${
                   isActive
                     ? 'bg-emerald-50 text-emerald-700 font-semibold'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`
               }
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              <span>{item.label}</span>
+              <div className="flex items-center space-x-3">
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                <span>{item.label}</span>
+              </div>
+              {isReceipts && pendingCount > 0 && (
+                <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-xs">
+                  {pendingCount}
+                </span>
+              )}
             </NavLink>
           );
         })}
+
 
         {user?.is_superuser && (
           <div className="pt-3 mt-3 border-t border-slate-100">

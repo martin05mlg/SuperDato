@@ -252,10 +252,10 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* Quick Preset Pills */}
-          <div className="flex items-center flex-wrap bg-slate-100 p-1 rounded-2xl text-xs font-semibold text-slate-600 gap-1 border border-slate-200">
+          <div className="flex items-center overflow-x-auto no-scrollbar bg-slate-100 p-1 rounded-2xl text-xs font-semibold text-slate-600 gap-1 border border-slate-200 max-w-full">
             <button
               onClick={() => handleSelectPreset('ALL')}
-              className={`px-3 py-1.5 rounded-xl transition ${
+              className={`px-3 py-1.5 rounded-xl transition whitespace-nowrap shrink-0 ${
                 preset === 'ALL'
                   ? 'bg-white text-emerald-800 shadow-sm font-bold'
                   : 'hover:text-slate-900 text-slate-600'
@@ -265,7 +265,7 @@ export const DashboardPage: React.FC = () => {
             </button>
             <button
               onClick={() => handleSelectPreset('30D')}
-              className={`px-3 py-1.5 rounded-xl transition ${
+              className={`px-3 py-1.5 rounded-xl transition whitespace-nowrap shrink-0 ${
                 preset === '30D'
                   ? 'bg-white text-emerald-800 shadow-sm font-bold'
                   : 'hover:text-slate-900 text-slate-600'
@@ -275,7 +275,7 @@ export const DashboardPage: React.FC = () => {
             </button>
             <button
               onClick={() => handleSelectPreset('THIS_MONTH')}
-              className={`px-3 py-1.5 rounded-xl transition ${
+              className={`px-3 py-1.5 rounded-xl transition whitespace-nowrap shrink-0 ${
                 preset === 'THIS_MONTH'
                   ? 'bg-white text-emerald-800 shadow-sm font-bold'
                   : 'hover:text-slate-900 text-slate-600'
@@ -285,7 +285,7 @@ export const DashboardPage: React.FC = () => {
             </button>
             <button
               onClick={() => handleSelectPreset('LAST_MONTH')}
-              className={`px-3 py-1.5 rounded-xl transition ${
+              className={`px-3 py-1.5 rounded-xl transition whitespace-nowrap shrink-0 ${
                 preset === 'LAST_MONTH'
                   ? 'bg-white text-emerald-800 shadow-sm font-bold'
                   : 'hover:text-slate-900 text-slate-600'
@@ -295,7 +295,7 @@ export const DashboardPage: React.FC = () => {
             </button>
             <button
               onClick={() => handleSelectPreset('THIS_YEAR')}
-              className={`px-3 py-1.5 rounded-xl transition ${
+              className={`px-3 py-1.5 rounded-xl transition whitespace-nowrap shrink-0 ${
                 preset === 'THIS_YEAR'
                   ? 'bg-white text-emerald-800 shadow-sm font-bold'
                   : 'hover:text-slate-900 text-slate-600'
@@ -305,13 +305,13 @@ export const DashboardPage: React.FC = () => {
             </button>
             <button
               onClick={handleEnableCustomPicker}
-              className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl transition ${
+              className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl transition whitespace-nowrap shrink-0 ${
                 preset === 'CUSTOM'
                   ? 'bg-emerald-600 text-white shadow-sm font-bold'
                   : 'hover:text-slate-900 text-slate-600'
               }`}
             >
-              <CalendarRange className="w-3.5 h-3.5" />
+              <CalendarRange className="w-3.5 h-3.5 shrink-0" />
               <span>Personalizado</span>
             </button>
           </div>
@@ -321,12 +321,12 @@ export const DashboardPage: React.FC = () => {
         {(showCustomPicker || preset === 'CUSTOM') && (
           <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
             <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-900">
-              <Filter className="w-4 h-4 text-emerald-700" />
-              <span>Rango de fechas personalizado:</span>
+              <Filter className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>Rango de fechas:</span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center space-x-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="flex items-center space-x-1.5 text-xs">
                 <label className="text-slate-600 font-medium">Desde:</label>
                 <input
                   type="date"
@@ -339,7 +339,7 @@ export const DashboardPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center space-x-2 text-xs">
+              <div className="flex items-center space-x-1.5 text-xs">
                 <label className="text-slate-600 font-medium">Hasta:</label>
                 <input
                   type="date"
@@ -370,24 +370,24 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Total Spend */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2 relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-            <span>Gasto Acumulado</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm space-y-1 sm:space-y-2 relative overflow-hidden flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-500 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
+            <span className="truncate">Gasto Acumulado</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+          <div className="text-xl sm:text-3xl font-extrabold text-slate-900 tracking-tight truncate">
             {loadingSummary ? '...' : `${summary?.total_spend?.toFixed(2) || '0.00'} €`}
           </div>
 
-          <div className="pt-1 flex flex-col gap-0.5">
+          <div className="pt-0.5 flex flex-col gap-0.5">
             {preset === 'ALL' || !dateRange.start_date ? null : summary?.previous_spend && summary.previous_spend > 0 ? (
-              <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex items-center gap-1 text-[10px] sm:text-xs truncate">
                 <span
-                  className={`inline-flex items-center font-bold px-2 py-0.5 rounded-full text-[11px] ${
+                  className={`inline-flex items-center font-bold px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] shrink-0 ${
                     summary.spend_variation_pct <= 0
                       ? 'bg-emerald-50 text-emerald-700'
                       : 'bg-rose-50 text-rose-700'
@@ -401,72 +401,72 @@ export const DashboardPage: React.FC = () => {
                   {summary.spend_variation_pct > 0 ? '+' : ''}
                   {summary.spend_variation_pct}%
                 </span>
-                <span className="text-slate-500 text-[11px] truncate" title={summary.comparison_label || ''}>
-                  {summary.comparison_label || `vs ${summary.previous_spend.toFixed(2)} € ant.`}
+                <span className="text-slate-400 text-[10px] sm:text-[11px] truncate">
+                  {summary.comparison_label || `vs ${summary.previous_spend.toFixed(2)} €`}
                 </span>
               </div>
             ) : summary?.comparison_label ? (
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <span>{summary.comparison_label}</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 truncate">
+                <span className="truncate">{summary.comparison_label}</span>
               </div>
             ) : null}
           </div>
         </div>
 
         {/* Number of Receipts */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-            <span>Tickets de Compra</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4" />
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm space-y-1 sm:space-y-2 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-500 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
+            <span className="truncate">Tickets Compra</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+          <div className="text-xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             {loadingSummary ? '...' : summary?.receipt_count || 0}
           </div>
-          <p className="text-xs text-slate-500 flex items-center gap-1">
-            <Package className="w-3.5 h-3.5 text-blue-500" />
-            <span>{summary?.total_items_count || 0} artículos adquiridos</span>
+          <p className="text-[10px] sm:text-xs text-slate-500 flex items-center gap-1 truncate">
+            <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500 shrink-0" />
+            <span className="truncate">{summary?.total_items_count || 0} artículos</span>
           </p>
         </div>
 
         {/* Average Ticket & Median */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-            <span>Ticket Medio</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <CreditCard className="w-4 h-4" />
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm space-y-1 sm:space-y-2 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-500 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
+            <span className="truncate">Ticket Medio</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+          <div className="text-xl sm:text-3xl font-extrabold text-slate-900 tracking-tight truncate">
             {loadingSummary ? '...' : `${summary?.average_ticket?.toFixed(2) || '0.00'} €`}
           </div>
-          <p className="text-xs text-slate-500">
-            Mediana contable: <span className="font-semibold text-slate-700">{summary?.median_ticket?.toFixed(2) || '0.00'} €</span>
+          <p className="text-[10px] sm:text-xs text-slate-500 truncate">
+            Mediana: <span className="font-semibold text-slate-700">{summary?.median_ticket?.toFixed(2) || '0.00'} €</span>
           </p>
         </div>
 
-        {/* Sync Status & Last Purchase with date and time */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider">
-            <span>Última Compra</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-              <Calendar className="w-4 h-4" />
+        {/* Sync Status & Last Purchase */}
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm space-y-1 sm:space-y-2 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-500 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
+            <span className="truncate">Última Compra</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-xl font-bold text-slate-900 tracking-tight">
+          <div className="flex items-baseline space-x-1.5 truncate">
+            <span className="text-base sm:text-xl font-bold text-slate-900 tracking-tight truncate">
               {lastPurchase.date}
             </span>
             {lastPurchase.time && (
-              <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-100 shrink-0">
                 {lastPurchase.time}
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 flex items-center gap-1.5 truncate">
+          <p className="text-[10px] sm:text-xs text-slate-500 flex items-center gap-1 truncate">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-            <span>{summary?.last_sync_at || 'Al día'}</span>
+            <span className="truncate">{summary?.last_sync_at || 'Al día'}</span>
           </p>
         </div>
       </div>
@@ -601,9 +601,9 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* Main Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Spending History Chart */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-base font-bold text-slate-900">Evolución de Compras</h2>
@@ -645,7 +645,7 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Category Distribution Donut Chart */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
             <h2 className="text-base font-bold text-slate-900 mb-0.5">Distribución por Categorías</h2>
             <p className="text-xs text-slate-500 mb-2">Porcentaje de gasto por sección</p>
@@ -681,16 +681,16 @@ export const DashboardPage: React.FC = () => {
           <div className="space-y-1.5 mt-3 max-h-36 overflow-y-auto pr-1">
             {categories.slice(0, 5).map((cat) => (
               <div key={cat.category_name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 min-w-0">
                   <div
                     className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: cat.color_hex }}
                   />
-                  <span className="text-slate-700 font-medium truncate max-w-[130px]">
+                  <span className="text-slate-700 font-medium truncate max-w-[120px] sm:max-w-[140px]">
                     {cat.category_name}
                   </span>
                 </div>
-                <span className="font-semibold text-slate-900">
+                <span className="font-semibold text-slate-900 shrink-0">
                   {cat.total_spend.toFixed(2)} € <span className="text-slate-400 text-[11px]">({cat.percentage}%)</span>
                 </span>
               </div>
@@ -700,9 +700,9 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Bottom Section: Top Products & Recent Receipts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Top 5 Products Table */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between">
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
               <div className="flex items-center space-x-2">
@@ -740,8 +740,8 @@ export const DashboardPage: React.FC = () => {
             <div className="divide-y divide-slate-100">
               {topProducts.length > 0 ? (
                 topProducts.map((p, idx) => (
-                  <div key={p.product_id || p.product_name} className="py-3 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
+                  <div key={p.product_id || p.product_name} className="py-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
                       {p.image_url ? (
                         <img
                           src={p.image_url}
@@ -754,26 +754,26 @@ export const DashboardPage: React.FC = () => {
                           #{idx + 1}
                         </div>
                       )}
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-900 truncate max-w-[180px] sm:max-w-[240px]">
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-semibold text-slate-900 truncate max-w-[140px] sm:max-w-[220px]">
                           {p.enriched_name || p.product_name}
                         </h4>
-                        <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
+                        <div className="flex items-center space-x-1.5 text-[11px] text-slate-400 mt-0.5 truncate">
                           {p.brand && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700">
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 shrink-0">
                               {p.brand}
                             </span>
                           )}
-                          <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">
+                          <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium shrink-0">
                             {p.category_name}
                           </span>
                           <span>•</span>
-                          <span>{p.purchases_count} compras ({p.total_quantity} ud/kg)</span>
+                          <span className="truncate">{p.purchases_count} compras</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <div className="text-sm font-bold text-slate-900">
                         {p.total_spend.toFixed(2)} €
                       </div>
@@ -793,7 +793,7 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Recent Purchases List */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between">
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">

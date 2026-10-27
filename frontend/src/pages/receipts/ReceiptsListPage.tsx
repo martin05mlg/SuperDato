@@ -241,27 +241,27 @@ export const ReceiptsListPage: React.FC = () => {
         </div>
 
         {/* Action Buttons: Manual, Upload, Export */}
-        <div className="flex items-center flex-wrap gap-2.5">
+        <div className="flex items-center flex-wrap gap-2">
           {/* Export Dropdown */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
               disabled={filteredReceipts.length === 0 || isExportingLines}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl text-xs shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-2 sm:px-3.5 sm:py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl text-xs shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Exportar datos a Excel o JSON"
             >
               {isExportingLines ? (
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-emerald-600" />
               ) : (
-                <Download className="w-4 h-4 text-slate-500" />
+                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
               )}
               <span>Exportar</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
             </button>
 
             {isExportMenuOpen && (
-              <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 py-1.5 divide-y divide-slate-100 animate-in fade-in zoom-in-95">
+              <div className="absolute left-0 sm:left-auto sm:right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 py-1.5 divide-y divide-slate-100 animate-in fade-in zoom-in-95">
                 <button
                   type="button"
                   onClick={() => {
@@ -312,21 +312,21 @@ export const ReceiptsListPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsManualModalOpen(true)}
-              className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-2.5 rounded-xl text-xs shadow-sm transition"
+              className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs shadow-sm transition"
             >
-              <Plus className="w-4 h-4 text-emerald-400" />
-              <span>+ Ticket Manual</span>
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+              <span>+ Manual</span>
             </button>
           )}
 
           {/* Upload PDF Button */}
-          <label className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2.5 rounded-xl text-sm shadow-sm transition cursor-pointer">
+          <label className="inline-flex items-center space-x-1.5 sm:space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm shadow-sm transition cursor-pointer">
             {isUploading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
             ) : (
-              <UploadCloud className="w-4 h-4" />
+              <UploadCloud className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             )}
-            <span>{isUploading ? 'Extrayendo datos...' : 'Subir Ticket PDF'}</span>
+            <span>{isUploading ? 'Extrayendo...' : 'Subir Ticket PDF'}</span>
             <input
               type="file"
               accept=".pdf"
@@ -346,20 +346,20 @@ export const ReceiptsListPage: React.FC = () => {
       )}
 
       {/* Tabs Switcher */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
         <button
           type="button"
           onClick={() => handleTabChange('household')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap flex-1 sm:flex-initial ${
             currentTab === 'household'
               ? 'bg-slate-900 text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
-          <Home className="w-4 h-4" />
-          <span>Tickets de {activeHousehold?.name || 'este Hogar'}</span>
+          <Home className="w-4 h-4 shrink-0" />
+          <span className="truncate">Tickets de {activeHousehold?.name || 'este Hogar'}</span>
           <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
+            className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
               currentTab === 'household'
                 ? 'bg-slate-800 text-slate-200'
                 : 'bg-slate-200 text-slate-700'
@@ -372,17 +372,17 @@ export const ReceiptsListPage: React.FC = () => {
         <button
           type="button"
           onClick={() => handleTabChange('pending')}
-          className={`relative flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`relative flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap flex-1 sm:flex-initial ${
             currentTab === 'pending'
               ? 'bg-amber-600 text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
-          <Clock className="w-4 h-4" />
-          <span>Pendientes de Asignar</span>
+          <Clock className="w-4 h-4 shrink-0" />
+          <span>Pendientes</span>
           {pendingCount > 0 ? (
             <span
-              className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+              className={`text-xs px-2 py-0.5 rounded-full font-bold shrink-0 ${
                 currentTab === 'pending'
                   ? 'bg-amber-800 text-white'
                   : 'bg-amber-100 text-amber-800 border border-amber-300'
@@ -391,7 +391,7 @@ export const ReceiptsListPage: React.FC = () => {
               {pendingCount}
             </span>
           ) : (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">0</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 shrink-0">0</span>
           )}
         </button>
       </div>
@@ -499,60 +499,197 @@ export const ReceiptsListPage: React.FC = () => {
         </div>
       )}
 
-      {/* Receipts Table */}
+      {/* Receipts Display: Mobile Cards + Desktop Table */}
       {!isLoading && filteredReceipts.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-xs uppercase tracking-wider">
-                <tr>
-                  {(currentTab === 'pending' || households.length > 1) && (
-                    <th className="py-3 px-3 w-10 text-center">
+        <>
+          {/* Mobile Card List (visible on screens < md) */}
+          <div className="md:hidden space-y-3">
+            {filteredReceipts.map((r) => (
+              <div
+                key={r.id}
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3 hover:border-slate-300 transition"
+              >
+                {/* Top Row: Checkbox + Invoice + Amount */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    {(currentTab === 'pending' || households.length > 1) && (
                       <input
                         type="checkbox"
-                        checked={
-                          filteredReceipts.length > 0 &&
-                          selectedPendingIds.length === filteredReceipts.length
-                        }
+                        checked={selectedPendingIds.includes(r.id)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedPendingIds(filteredReceipts.map((r) => r.id));
+                            setSelectedPendingIds([...selectedPendingIds, r.id]);
                           } else {
-                            setSelectedPendingIds([]);
+                            setSelectedPendingIds(selectedPendingIds.filter((id) => id !== r.id));
                           }
                         }}
-                        className={`rounded border-slate-300 ${
+                        className={`rounded border-slate-300 w-4 h-4 shrink-0 ${
                           currentTab === 'pending'
                             ? 'text-amber-600 focus:ring-amber-500'
                             : 'text-purple-600 focus:ring-purple-500'
                         }`}
                       />
-                    </th>
-                  )}
-                  <th className="py-3 px-4">Factura</th>
-                  <th className="py-3 px-4">Fecha y Hora</th>
-                  <th className="py-3 px-4">Tienda / Localidad</th>
-                  <th className="py-3 px-4 text-center">Artículos</th>
-                  <th className="py-3 px-4 text-right">Importe Total</th>
-                  <th className="py-3 px-4 text-center">
-                    {currentTab === 'pending' ? 'Destino / Asignación' : 'Estado'}
-                  </th>
-                  <th className="py-3 px-4 text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredReceipts.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/70 transition">
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-sm">
+                        <ReceiptIcon
+                          className={`w-4 h-4 shrink-0 ${
+                            currentTab === 'pending' ? 'text-amber-600' : 'text-emerald-600'
+                          }`}
+                        />
+                        <span className="truncate">{r.invoice_number}</span>
+                      </div>
+                      {r.imported_by_name && (
+                        <div className="flex items-center space-x-1 text-[11px] text-slate-500 font-normal mt-0.5">
+                          <User className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{r.imported_by_name}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <div className="text-base font-black text-slate-900 tracking-tight">
+                      {r.total_amount.toFixed(2)} €
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-400">
+                      {r.lines_count} artículos
+                    </span>
+                  </div>
+                </div>
+
+                {/* Middle Row: Date & Store */}
+                <div className="pt-2 border-t border-slate-100 flex flex-col gap-1 text-xs text-slate-600">
+                  <div className="flex items-center space-x-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>{r.purchase_datetime.replace('T', ' ')}</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">
+                      {r.store_address || 'Mercadona'}, {r.store_city || ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bottom Row: Pending controls OR detail & move actions */}
+                {currentTab === 'pending' ? (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <select
+                      value={
+                        rowSelectedHouseholds[r.id] ||
+                        activeHousehold?.id ||
+                        (households[0] ? households[0].id : '')
+                      }
+                      onChange={(e) =>
+                        setRowSelectedHouseholds({
+                          ...rowSelectedHouseholds,
+                          [r.id]: e.target.value,
+                        })
+                      }
+                      className="text-xs font-semibold border border-amber-200 bg-amber-50/50 text-slate-800 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 flex-1 truncate"
+                    >
+                      {households.map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {h.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleAssignSingle(r.id)}
+                      disabled={assigningId === r.id}
+                      className="inline-flex items-center space-x-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-xl text-xs transition disabled:opacity-50 shrink-0 shadow-xs"
+                    >
+                      {assigningId === r.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      )}
+                      <span>Asignar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleViewDetail(r.id)}
+                      disabled={loadingDetailId === r.id}
+                      className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs transition shrink-0"
+                      title="Ver desglose"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center space-x-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-[11px] font-semibold border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      <span>Procesado</span>
+                    </span>
+
+                    <div className="flex items-center space-x-1.5">
+                      {households.length > 1 && (
+                        <button
+                          onClick={() => {
+                            setQuickMoveReceipt(r);
+                            setQuickMoveTarget('');
+                          }}
+                          className="inline-flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold px-2.5 py-1.5 rounded-xl text-xs transition border border-purple-200"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Mover</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleViewDetail(r.id)}
+                        disabled={loadingDetailId === r.id}
+                        className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-xl text-xs transition"
+                      >
+                        {loadingDetailId === r.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5" />
+                        )}
+                        <span>Detalle</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteReceipt(r)}
+                        disabled={deletingId === r.id}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                        title="Eliminar ticket"
+                      >
+                        {deletingId === r.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table (hidden on mobile, visible on md+) */}
+          <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-xs uppercase tracking-wider">
+                  <tr>
                     {(currentTab === 'pending' || households.length > 1) && (
-                      <td className="py-3 px-3 text-center">
+                      <th className="py-3 px-3 w-10 text-center">
                         <input
                           type="checkbox"
-                          checked={selectedPendingIds.includes(r.id)}
+                          checked={
+                            filteredReceipts.length > 0 &&
+                            selectedPendingIds.length === filteredReceipts.length
+                          }
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedPendingIds([...selectedPendingIds, r.id]);
+                              setSelectedPendingIds(filteredReceipts.map((r) => r.id));
                             } else {
-                              setSelectedPendingIds(selectedPendingIds.filter((id) => id !== r.id));
+                              setSelectedPendingIds([]);
                             }
                           }}
                           className={`rounded border-slate-300 ${
@@ -561,141 +698,176 @@ export const ReceiptsListPage: React.FC = () => {
                               : 'text-purple-600 focus:ring-purple-500'
                           }`}
                         />
-                      </td>
+                      </th>
                     )}
-                    <td className="py-3 px-4 font-bold text-slate-900">
-                      <div className="flex items-center space-x-2">
-                        <ReceiptIcon
-                          className={`w-4 h-4 ${
-                            currentTab === 'pending' ? 'text-amber-600' : 'text-emerald-600'
-                          }`}
-                        />
-                        <span>{r.invoice_number}</span>
-                      </div>
-                      {r.imported_by_name && (
-                        <div className="flex items-center space-x-1 text-[11px] text-slate-500 font-normal mt-0.5">
-                          <User className="w-3 h-3 text-slate-400" />
-                          <span>{r.imported_by_name}</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 text-xs">
-                      <div className="flex items-center space-x-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{r.purchase_datetime.replace('T', ' ')}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 text-xs">
-                      <div className="flex items-center space-x-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                        <span className="truncate max-w-xs">
-                          {r.store_address || 'Mercadona'}, {r.store_city || ''}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center text-xs font-medium text-slate-700">
-                      {r.lines_count} líneas
-                    </td>
-                    <td className="py-3 px-4 text-right font-extrabold text-slate-900 text-base">
-                      {r.total_amount.toFixed(2)} €
-                    </td>
-
-                    {/* Status or Assignment Control */}
-                    <td className="py-3 px-4 text-center">
-                      {currentTab === 'pending' ? (
-                        <div className="flex items-center justify-center space-x-2">
-                          <select
-                            value={
-                              rowSelectedHouseholds[r.id] ||
-                              activeHousehold?.id ||
-                              (households[0] ? households[0].id : '')
-                            }
-                            onChange={(e) =>
-                              setRowSelectedHouseholds({
-                                ...rowSelectedHouseholds,
-                                [r.id]: e.target.value,
-                              })
-                            }
-                            className="text-xs font-medium border border-slate-200 bg-white rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                          >
-                            {households.map((h) => (
-                              <option key={h.id} value={h.id}>
-                                {h.name}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => handleAssignSingle(r.id)}
-                            disabled={assigningId === r.id}
-                            className="inline-flex items-center space-x-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-2.5 py-1 rounded-lg text-xs transition disabled:opacity-50"
-                          >
-                            {assigningId === r.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <ArrowRight className="w-3 h-3" />
-                            )}
-                            <span>Asignar</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Procesado</span>
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center space-x-1.5">
-                        {households.length > 1 && currentTab === 'household' && (
-                          <button
-                            onClick={() => {
-                              setQuickMoveReceipt(r);
-                              setQuickMoveTarget('');
-                            }}
-                            className="inline-flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium px-2.5 py-1.5 rounded-lg text-xs transition border border-purple-200"
-                            title="Mover ticket a otro hogar"
-                          >
-                            <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600" />
-                            <span>Mover</span>
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => handleViewDetail(r.id)}
-                          disabled={loadingDetailId === r.id}
-                          className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg text-xs transition"
-                          title="Ver desglose detallado"
-                        >
-                          {loadingDetailId === r.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                          )}
-                          <span>Ver Desglose</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteReceipt(r)}
-                          disabled={deletingId === r.id}
-                          className="inline-flex items-center justify-center p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
-                          title="Eliminar ticket"
-                        >
-                          {deletingId === r.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
+                    <th className="py-3 px-4">Factura</th>
+                    <th className="py-3 px-4">Fecha y Hora</th>
+                    <th className="py-3 px-4">Tienda / Localidad</th>
+                    <th className="py-3 px-4 text-center">Artículos</th>
+                    <th className="py-3 px-4 text-right">Importe Total</th>
+                    <th className="py-3 px-4 text-center">
+                      {currentTab === 'pending' ? 'Destino / Asignación' : 'Estado'}
+                    </th>
+                    <th className="py-3 px-4 text-center">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredReceipts.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/70 transition">
+                      {(currentTab === 'pending' || households.length > 1) && (
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedPendingIds.includes(r.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPendingIds([...selectedPendingIds, r.id]);
+                              } else {
+                                setSelectedPendingIds(selectedPendingIds.filter((id) => id !== r.id));
+                              }
+                            }}
+                            className={`rounded border-slate-300 ${
+                              currentTab === 'pending'
+                                ? 'text-amber-600 focus:ring-amber-500'
+                                : 'text-purple-600 focus:ring-purple-500'
+                            }`}
+                          />
+                        </td>
+                      )}
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        <div className="flex items-center space-x-2">
+                          <ReceiptIcon
+                            className={`w-4 h-4 ${
+                              currentTab === 'pending' ? 'text-amber-600' : 'text-emerald-600'
+                            }`}
+                          />
+                          <span>{r.invoice_number}</span>
+                        </div>
+                        {r.imported_by_name && (
+                          <div className="flex items-center space-x-1 text-[11px] text-slate-500 font-normal mt-0.5">
+                            <User className="w-3 h-3 text-slate-400" />
+                            <span>{r.imported_by_name}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 text-xs">
+                        <div className="flex items-center space-x-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{r.purchase_datetime.replace('T', ' ')}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 text-xs">
+                        <div className="flex items-center space-x-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                          <span className="truncate max-w-xs">
+                            {r.store_address || 'Mercadona'}, {r.store_city || ''}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center text-xs font-medium text-slate-700">
+                        {r.lines_count} líneas
+                      </td>
+                      <td className="py-3 px-4 text-right font-extrabold text-slate-900 text-base">
+                        {r.total_amount.toFixed(2)} €
+                      </td>
+
+                      {/* Status or Assignment Control */}
+                      <td className="py-3 px-4 text-center">
+                        {currentTab === 'pending' ? (
+                          <div className="flex items-center justify-center space-x-2">
+                            <select
+                              value={
+                                rowSelectedHouseholds[r.id] ||
+                                activeHousehold?.id ||
+                                (households[0] ? households[0].id : '')
+                              }
+                              onChange={(e) =>
+                                setRowSelectedHouseholds({
+                                 ...rowSelectedHouseholds,
+                                  [r.id]: e.target.value,
+                                })
+                              }
+                              className="text-xs font-medium border border-slate-200 bg-white rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            >
+                              {households.map((h) => (
+                                <option key={h.id} value={h.id}>
+                                  {h.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => handleAssignSingle(r.id)}
+                              disabled={assigningId === r.id}
+                              className="inline-flex items-center space-x-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-2.5 py-1 rounded-lg text-xs transition disabled:opacity-50"
+                            >
+                              {assigningId === r.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <ArrowRight className="w-3 h-3" />
+                              )}
+                              <span>Asignar</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Procesado</span>
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          {households.length > 1 && currentTab === 'household' && (
+                            <button
+                              onClick={() => {
+                                setQuickMoveReceipt(r);
+                                setQuickMoveTarget('');
+                              }}
+                              className="inline-flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium px-2.5 py-1.5 rounded-lg text-xs transition border border-purple-200"
+                              title="Mover ticket a otro hogar"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Mover</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => handleViewDetail(r.id)}
+                            disabled={loadingDetailId === r.id}
+                            className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg text-xs transition"
+                            title="Ver desglose detallado"
+                          >
+                            {loadingDetailId === r.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                            <span>Ver Desglose</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteReceipt(r)}
+                            disabled={deletingId === r.id}
+                            className="inline-flex items-center justify-center p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                            title="Eliminar ticket"
+                          >
+                            {deletingId === r.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Empty State */}
