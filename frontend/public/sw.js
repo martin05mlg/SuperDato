@@ -1,9 +1,16 @@
 // SuperDato Lightweight Service Worker for PWA Installation and App Shell Cache
-const CACHE_NAME = 'superdato-v1';
+const CACHE_NAME = 'superdato-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/favicon.svg',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/apple-touch-icon.png',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-192x192.png',
+  '/pwa-maskable-512x512.png',
   '/manifest.webmanifest'
 ];
 
