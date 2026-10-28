@@ -809,30 +809,30 @@ export const DashboardPage: React.FC = () => {
                   <div
                     key={r.id}
                     onClick={() => handleOpenReceiptDetail(r.id)}
-                    className="py-3 flex items-center justify-between hover:bg-slate-50/80 -mx-3 px-3 rounded-2xl cursor-pointer transition"
+                    className="py-2 sm:py-2.5 flex items-center justify-between hover:bg-slate-50/80 -mx-2 sm:-mx-3 px-2 sm:px-3 rounded-xl sm:rounded-2xl cursor-pointer transition gap-2"
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                        <ShoppingBag className="w-4 h-4" />
+                    <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                        <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900">
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-900 truncate">
                           Factura {r.invoice_number}
                         </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
+                        <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
                           {r.store_address ? `${r.store_address}, ${r.store_city || ''}` : 'Mercadona'} • {r.lines_count || 0} art.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
                       <div className="text-right">
-                        <div className="text-sm font-extrabold text-slate-900">
+                        <div className="text-xs sm:text-sm font-extrabold text-slate-900">
                           {r.total_amount.toFixed(2)} €
                         </div>
-                        <span className="text-[11px] text-slate-400">{r.purchase_date}</span>
+                        <span className="text-[10px] text-slate-400">{r.purchase_date}</span>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                      <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
                     </div>
                   </div>
                 ))

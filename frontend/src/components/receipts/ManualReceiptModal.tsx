@@ -454,94 +454,96 @@ export const ManualReceiptModal: React.FC<ManualReceiptModalProps> = ({
                     key={line.tempId}
                     className="p-3.5 bg-white border border-slate-200/90 rounded-2xl shadow-sm hover:border-slate-300 transition space-y-2.5 relative"
                   >
-                    <div className="flex items-start gap-3">
-                      {/* Product Thumbnail / Placeholder */}
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
-                        {line.image_url ? (
-                          <img
-                            src={line.image_url}
-                            alt=""
-                            className="w-full h-full object-contain p-0.5"
-                          />
-                        ) : (
-                          <Package className="w-5 h-5 text-slate-400" />
-                        )}
-                      </div>
-
-                      {/* Product description & Autocomplete */}
-                      <div className="flex-1 relative">
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Producto / Nombre en Ticket #{idx + 1}
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="Buscar en catálogo Mercadona o escribir nombre libre..."
-                            value={line.raw_description}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              updateLineField(line.tempId, 'raw_description', val);
-                              handleLineSearch(line.tempId, val);
-                            }}
-                            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition"
-                          />
-                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                          {line.isSearching && (
-                            <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin absolute right-2.5 top-2.5" />
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-2.5 sm:gap-3">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                        {/* Product Thumbnail / Placeholder */}
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                          {line.image_url ? (
+                            <img
+                              src={line.image_url}
+                              alt=""
+                              className="w-full h-full object-contain p-0.5"
+                            />
+                          ) : (
+                            <Package className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                           )}
                         </div>
 
-                        {/* Search Suggestions Dropdown */}
-                        {line.searchResults.length > 0 && (
-                          <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95">
-                            {line.searchResults.map((p) => (
-                              <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => handleSelectProduct(line.tempId, p)}
-                                className="w-full px-3 py-2 text-left hover:bg-emerald-50/60 flex items-center justify-between text-xs transition"
-                              >
-                                <div className="flex items-center gap-2.5 truncate">
-                                  {p.image_url ? (
-                                    <img
-                                      src={p.image_url}
-                                      alt=""
-                                      className="w-6 h-6 object-contain rounded shrink-0 bg-white border border-slate-100"
-                                    />
-                                  ) : (
-                                    <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center shrink-0">
-                                      <Package className="w-3.5 h-3.5 text-slate-400" />
+                        {/* Product description & Autocomplete */}
+                        <div className="flex-1 min-w-0 relative">
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                            Producto / Nombre en Ticket #{idx + 1}
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Buscar en catálogo Mercadona o escribir nombre libre..."
+                              value={line.raw_description}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateLineField(line.tempId, 'raw_description', val);
+                                handleLineSearch(line.tempId, val);
+                              }}
+                              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition"
+                            />
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                            {line.isSearching && (
+                              <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin absolute right-2.5 top-2.5" />
+                            )}
+                          </div>
+
+                          {/* Search Suggestions Dropdown */}
+                          {line.searchResults.length > 0 && (
+                            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95">
+                              {line.searchResults.map((p) => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => handleSelectProduct(line.tempId, p)}
+                                  className="w-full px-3 py-2 text-left hover:bg-emerald-50/60 flex items-center justify-between text-xs transition"
+                                >
+                                  <div className="flex items-center gap-2.5 truncate">
+                                    {p.image_url ? (
+                                      <img
+                                        src={p.image_url}
+                                        alt=""
+                                        className="w-6 h-6 object-contain rounded shrink-0 bg-white border border-slate-100"
+                                      />
+                                    ) : (
+                                      <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center shrink-0">
+                                        <Package className="w-3.5 h-3.5 text-slate-400" />
+                                      </div>
+                                    )}
+                                    <div className="truncate">
+                                      <span className="font-semibold text-slate-800">
+                                        {p.canonical_name}
+                                      </span>
+                                      {p.brand && (
+                                        <span className="ml-1.5 text-[10px] text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded font-medium">
+                                          {p.brand}
+                                        </span>
+                                      )}
                                     </div>
-                                  )}
-                                  <div className="truncate">
-                                    <span className="font-semibold text-slate-800">
-                                      {p.canonical_name}
-                                    </span>
-                                    {p.brand && (
-                                      <span className="ml-1.5 text-[10px] text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded font-medium">
-                                        {p.brand}
+                                  </div>
+                                  <div className="text-right shrink-0 ml-2">
+                                    {p.latest_price && (
+                                      <span className="font-bold text-slate-900">
+                                        {p.latest_price.toFixed(2)} €
                                       </span>
                                     )}
-                                  </div>
-                                </div>
-                                <div className="text-right shrink-0 ml-2">
-                                  {p.latest_price && (
-                                    <span className="font-bold text-slate-900">
-                                      {p.latest_price.toFixed(2)} €
+                                    <span className="text-[10px] text-slate-400 ml-1">
+                                      /{p.default_unit || 'ud'}
                                     </span>
-                                  )}
-                                  <span className="text-[10px] text-slate-400 ml-1">
-                                    /{p.default_unit || 'ud'}
-                                  </span>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Weighed Item Toggle */}
-                      <div className="shrink-0 pt-5">
+                      {/* Weighed Item Toggle & Remove Button */}
+                      <div className="flex items-center justify-between sm:justify-start gap-2 shrink-0 sm:pt-5">
                         <button
                           type="button"
                           onClick={() =>
@@ -555,19 +557,18 @@ export const ManualReceiptModal: React.FC<ManualReceiptModalProps> = ({
                           title="Alternar entre venta por unidades o venta al peso (kg)"
                         >
                           <Scale className="w-3.5 h-3.5" />
-                          <span>{line.is_weighed_item ? 'Al peso (kg)' : 'Unidades'}</span>
+                          <span>{line.is_weighed_item ? 'Al peso' : 'Unidades'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => removeLine(line.tempId)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                          title="Eliminar artículo"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-
-                      {/* Remove Line Button */}
-                      <button
-                        type="button"
-                        onClick={() => removeLine(line.tempId)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition mt-5"
-                        title="Eliminar artículo"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
 
                     {/* Numeric Row: Quantity, Unit Price, Tax, Subtotal */}

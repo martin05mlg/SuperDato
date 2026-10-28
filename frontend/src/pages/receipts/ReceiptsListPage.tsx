@@ -398,17 +398,17 @@ export const ReceiptsListPage: React.FC = () => {
 
       {/* Household Move Batch Action Bar */}
       {currentTab === 'household' && households.length > 1 && selectedPendingIds.length > 0 && (
-        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in">
+        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 animate-in fade-in">
           <div className="flex items-center space-x-2 text-xs font-semibold text-purple-900">
-            <ArrowRightLeft className="w-4 h-4 text-purple-600" />
+            <ArrowRightLeft className="w-4 h-4 text-purple-600 shrink-0" />
             <span>{selectedPendingIds.length} tickets seleccionados para mover</span>
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2 w-full sm:w-auto">
             <select
               value={bulkTargetHousehold}
               onChange={(e) => setBulkTargetHousehold(e.target.value)}
-              className="text-xs font-medium border border-purple-300 bg-white rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="text-xs font-medium border border-purple-300 bg-white rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500 w-full xs:w-auto min-w-0 flex-1 truncate"
             >
               <option value="">Selecciona hogar destino...</option>
               {households
@@ -425,7 +425,7 @@ export const ReceiptsListPage: React.FC = () => {
               type="button"
               onClick={handleBulkAssign}
               disabled={isBulkAssigning || !bulkTargetHousehold}
-              className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center space-x-1"
+              className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center justify-center space-x-1 shrink-0"
             >
               {isBulkAssigning ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -440,17 +440,17 @@ export const ReceiptsListPage: React.FC = () => {
 
       {/* Pending Batch Action Bar */}
       {currentTab === 'pending' && selectedPendingIds.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 animate-in fade-in">
           <div className="flex items-center space-x-2 text-xs font-semibold text-amber-900">
-            <CheckCheck className="w-4 h-4 text-amber-600" />
+            <CheckCheck className="w-4 h-4 text-amber-600 shrink-0" />
             <span>{selectedPendingIds.length} tickets seleccionados</span>
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2 w-full sm:w-auto">
             <select
               value={bulkTargetHousehold}
               onChange={(e) => setBulkTargetHousehold(e.target.value)}
-              className="text-xs font-medium border border-amber-300 bg-white rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="text-xs font-medium border border-amber-300 bg-white rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 w-full xs:w-auto min-w-0 flex-1 truncate"
             >
               <option value="">Selecciona hogar destino...</option>
               {households.map((h) => (
@@ -464,7 +464,7 @@ export const ReceiptsListPage: React.FC = () => {
               type="button"
               onClick={handleBulkAssign}
               disabled={isBulkAssigning || !bulkTargetHousehold}
-              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center space-x-1"
+              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center justify-center space-x-1 shrink-0"
             >
               {isBulkAssigning ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -503,19 +503,21 @@ export const ReceiptsListPage: React.FC = () => {
       {!isLoading && filteredReceipts.length > 0 && (
         <>
           {/* Mobile Card List (visible on screens < md) */}
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-2.5">
             {filteredReceipts.map((r) => (
               <div
                 key={r.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3 hover:border-slate-300 transition"
+                onClick={() => handleViewDetail(r.id)}
+                className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3 space-y-2 hover:border-slate-300 transition cursor-pointer active:bg-slate-50/60"
               >
                 {/* Top Row: Checkbox + Invoice + Amount */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center space-x-2.5 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2 min-w-0">
                     {(currentTab === 'pending' || households.length > 1) && (
                       <input
                         type="checkbox"
                         checked={selectedPendingIds.includes(r.id)}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setSelectedPendingIds([...selectedPendingIds, r.id]);
@@ -530,51 +532,49 @@ export const ReceiptsListPage: React.FC = () => {
                         }`}
                       />
                     )}
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                      <ReceiptIcon className="w-3.5 h-3.5" />
+                    </div>
                     <div className="min-w-0">
-                      <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-sm">
-                        <ReceiptIcon
-                          className={`w-4 h-4 shrink-0 ${
-                            currentTab === 'pending' ? 'text-amber-600' : 'text-emerald-600'
-                          }`}
-                        />
-                        <span className="truncate">{r.invoice_number}</span>
+                      <div className="font-bold text-slate-900 text-xs sm:text-sm truncate">
+                        Factura {r.invoice_number}
                       </div>
                       {r.imported_by_name && (
-                        <div className="flex items-center space-x-1 text-[11px] text-slate-500 font-normal mt-0.5">
-                          <User className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="truncate">{r.imported_by_name}</span>
+                        <div className="text-[10px] text-slate-400 truncate leading-none mt-0.5">
+                          {r.imported_by_name}
                         </div>
                       )}
                     </div>
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-base font-black text-slate-900 tracking-tight">
+                    <div className="text-sm font-extrabold text-slate-900 tracking-tight">
                       {r.total_amount.toFixed(2)} €
                     </div>
-                    <span className="text-[11px] font-medium text-slate-400">
-                      {r.lines_count} artículos
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {r.lines_count} art.
                     </span>
                   </div>
                 </div>
 
-                {/* Middle Row: Date & Store */}
-                <div className="pt-2 border-t border-slate-100 flex flex-col gap-1 text-xs text-slate-600">
-                  <div className="flex items-center space-x-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>{r.purchase_datetime.replace('T', ' ')}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">
-                      {r.store_address || 'Mercadona'}, {r.store_city || ''}
-                    </span>
-                  </div>
+                {/* Middle Row: Date & Store in one compact line */}
+                <div className="flex items-center justify-between text-[11px] text-slate-500 gap-2 pt-1 border-t border-slate-100">
+                  <span className="flex items-center gap-1 shrink-0">
+                    <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span>{r.purchase_datetime ? r.purchase_datetime.replace('T', ' ').slice(0, 16) : ''}</span>
+                  </span>
+                  <span className="truncate flex items-center gap-1 min-w-0 text-slate-600">
+                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="truncate">{r.store_address ? `${r.store_address}, ${r.store_city || ''}` : 'Mercadona'}</span>
+                  </span>
                 </div>
 
                 {/* Bottom Row: Pending controls OR detail & move actions */}
                 {currentTab === 'pending' ? (
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div
+                    className="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <select
                       value={
                         rowSelectedHouseholds[r.id] ||
@@ -587,7 +587,7 @@ export const ReceiptsListPage: React.FC = () => {
                           [r.id]: e.target.value,
                         })
                       }
-                      className="text-xs font-semibold border border-amber-200 bg-amber-50/50 text-slate-800 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 flex-1 truncate"
+                      className="text-xs font-semibold border border-amber-200 bg-amber-50/50 text-slate-800 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-500 flex-1 min-w-0 truncate"
                     >
                       {households.map((h) => (
                         <option key={h.id} value={h.id}>
@@ -599,12 +599,12 @@ export const ReceiptsListPage: React.FC = () => {
                       type="button"
                       onClick={() => handleAssignSingle(r.id)}
                       disabled={assigningId === r.id}
-                      className="inline-flex items-center space-x-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-xl text-xs transition disabled:opacity-50 shrink-0 shadow-xs"
+                      className="inline-flex items-center space-x-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-2.5 py-1 rounded-lg text-xs transition disabled:opacity-50 shrink-0 shadow-xs"
                     >
                       {assigningId === r.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <ArrowRight className="w-3 h-3" />
                       )}
                       <span>Asignar</span>
                     </button>
@@ -612,29 +612,32 @@ export const ReceiptsListPage: React.FC = () => {
                       type="button"
                       onClick={() => handleViewDetail(r.id)}
                       disabled={loadingDetailId === r.id}
-                      className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs transition shrink-0"
+                      className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs transition shrink-0"
                       title="Ver desglose"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : (
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center space-x-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-[11px] font-semibold border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3 shrink-0" />
+                  <div
+                    className="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="inline-flex items-center space-x-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-emerald-200">
+                      <CheckCircle2 className="w-2.5 h-2.5 shrink-0" />
                       <span>Procesado</span>
                     </span>
 
-                    <div className="flex items-center space-x-1.5">
+                    <div className="flex items-center space-x-1 shrink-0">
                       {households.length > 1 && (
                         <button
                           onClick={() => {
                             setQuickMoveReceipt(r);
                             setQuickMoveTarget('');
                           }}
-                          className="inline-flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold px-2.5 py-1.5 rounded-xl text-xs transition border border-purple-200"
+                          className="inline-flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold px-2 py-1 rounded-lg text-[11px] transition border border-purple-200"
                         >
-                          <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600" />
+                          <ArrowRightLeft className="w-3 h-3 text-purple-600" />
                           <span>Mover</span>
                         </button>
                       )}
@@ -642,12 +645,12 @@ export const ReceiptsListPage: React.FC = () => {
                       <button
                         onClick={() => handleViewDetail(r.id)}
                         disabled={loadingDetailId === r.id}
-                        className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-xl text-xs transition"
+                        className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded-lg text-[11px] transition"
                       >
                         {loadingDetailId === r.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <Loader2 className="w-3 h-3 animate-spin" />
                         ) : (
-                          <Eye className="w-3.5 h-3.5" />
+                          <Eye className="w-3 h-3" />
                         )}
                         <span>Detalle</span>
                       </button>
@@ -655,13 +658,13 @@ export const ReceiptsListPage: React.FC = () => {
                       <button
                         onClick={() => handleDeleteReceipt(r)}
                         disabled={deletingId === r.id}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                         title="Eliminar ticket"
                       >
                         {deletingId === r.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                          <Loader2 className="w-3 h-3 animate-spin text-rose-600" />
                         ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         )}
                       </button>
                     </div>

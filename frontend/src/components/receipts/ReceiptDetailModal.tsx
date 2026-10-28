@@ -220,14 +220,14 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
 
         {/* Household Reassignment Box (Visible if multiple households exist) */}
         {households.length > 1 && (
-          <div className="px-6 py-3 bg-purple-50/70 border-b border-purple-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center space-x-2.5">
+          <div className="px-4 sm:px-6 py-2.5 sm:py-3 bg-purple-50/70 border-b border-purple-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center space-x-2.5 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
                 <Home className="w-3.5 h-3.5" />
               </div>
-              <div>
-                <span className="font-bold text-slate-800">Hogar asignado: </span>
-                <span className="font-semibold text-purple-700">
+              <div className="min-w-0">
+                <span className="font-bold text-slate-800">Hogar: </span>
+                <span className="font-semibold text-purple-700 truncate">
                   {currentHousehold?.name || (currentReceipt.household_id ? 'Hogar asignado' : 'Pendiente de asignar')}
                 </span>
                 {moveFeedback && (
@@ -240,7 +240,7 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
               <select
                 value={targetHouseholdId}
                 onChange={(e) => setTargetHouseholdId(e.target.value)}
-                className="text-xs font-medium border border-purple-200 bg-white rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-700"
+                className="text-xs font-medium border border-purple-200 bg-white rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 flex-1 sm:flex-initial min-w-0 truncate"
               >
                 <option value="">Mover ticket a...</option>
                 {households
@@ -278,11 +278,11 @@ export const ReceiptDetailModal: React.FC<Props> = ({ receipt, onClose, onReceip
 
           {/* Items Table */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Líneas de Compra ({currentReceipt.lines?.length || 0} artículos)
               </h4>
-              <span className="text-[11px] text-slate-400 italic">
+              <span className="text-[10px] sm:text-[11px] text-slate-400 italic">
                 Haz clic en el lápiz para corregir manualmente una línea
               </span>
             </div>
