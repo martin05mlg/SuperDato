@@ -981,11 +981,19 @@ export const AdminDashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-[11px] text-amber-200 flex items-start space-x-2">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-[11px] text-amber-200 flex items-start space-x-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <span>
-                  <strong>Usuarios de prueba:</strong> Mientras la app esté en modo <em>Prueba</em> en Google Cloud, añade los correos de Gmail que desees sincronizar en la sección <em>Usuarios de prueba</em> de la pantalla de consentimiento.
-                </span>
+                <div className="space-y-1.5 leading-relaxed">
+                  <div>
+                    <strong className="text-amber-300 font-bold">Importante sobre la caducidad a los 7 días:</strong> Si la app en Google Cloud está en estado <em>&quot;Testing&quot; (En pruebas)</em>, Google revoca automáticamente los tokens de actualización cada 7 días, produciendo el error <code>invalid_grant: Token has been expired or revoked</code>.
+                  </div>
+                  <div>
+                    <strong className="text-amber-300 font-bold">Cómo evitar que caduquen:</strong> En Google Cloud Console &rarr; <em>Pantalla de consentimiento de OAuth</em>, haz clic en el botón <strong>&quot;Publicar aplicación&quot;</strong> para pasarla a <em>En producción</em>. Para uso personal o doméstico no necesitas verificación de Google (te permitirá hasta 100 usuarios y los tokens serán permanentes).
+                  </div>
+                  <div>
+                    <strong className="text-amber-300 font-bold">Múltiples cuentas de Gmail:</strong> Puedes vincular varias cuentas de Gmail al mismo hogar. Google mostrará siempre el selector de cuenta (<em>select_account</em>) para elegir qué correo vincular en cada momento.
+                  </div>
+                </div>
               </div>
             </div>
           )}

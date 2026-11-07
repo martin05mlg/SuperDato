@@ -31,9 +31,11 @@ export interface ImportJobItem {
 }
 
 export const integrationsApi = {
-  getGoogleAuthUrl: async (householdId: string): Promise<string> => {
+  getGoogleAuthUrl: async (householdId: string, loginHint?: string): Promise<string> => {
+    const params = new URLSearchParams({ household_id: householdId });
+    if (loginHint) params.append('login_hint', loginHint);
     const res = await apiClient.get<{ authorization_url: string }>(
-      `/integrations/google/authorize-url?household_id=${householdId}`
+      `/integrations/google/authorize-url?${params.toString()}`
     );
     return res.data.authorization_url;
   },

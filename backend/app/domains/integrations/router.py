@@ -32,6 +32,7 @@ router = APIRouter(prefix="/integrations", tags=["Integrations"])
 @router.get("/google/authorize-url", response_model=GoogleAuthUrlResponse)
 async def get_google_authorize_url(
     household_id: uuid.UUID = Query(...),
+    login_hint: Optional[str] = Query(None, description="Email de la cuenta de Google a sugerir o reconectar"),
     current_user: User = Depends(get_current_user),
     membership: HouseholdMembership = Depends(require_household_permission(Permission.CONNECT_INTEGRATIONS)),
     db: AsyncSession = Depends(get_db),
@@ -45,6 +46,7 @@ async def get_google_authorize_url(
         str(household_id),
         client_id=client_id,
         redirect_uri=redirect_uri,
+        login_hint=login_hint,
     )
     return GoogleAuthUrlResponse(authorization_url=url)
 
@@ -97,14 +99,13 @@ async def google_oauth_callback(
             client_secret=client_secret,
             redirect_uri=redirect_uri,
         )
-        google_email = await GoogleOAuthClient.get_user_email(tokens["access_token"])
+        raw_email = await GoogleOAuthClient.get_user_email(tokens["access_token"])
+        google_email = raw_email.strip().lower()
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error al intercambiar código con Google: {str(e)}",
         )
-
-    encrypted_payload = encrypt_secret(json.dumps(tokens))
 
     # Check if connection for this specific google_email already exists in this household
     query = select(GoogleAccountConnection).where(
@@ -113,6 +114,18 @@ async def google_oauth_callback(
     )
     result = await db.execute(query)
     conn = result.scalar_one_or_none()
+
+    # If Google did not re-send refresh_token (e.g. during re-auth), preserve the previously saved one
+    if conn and "refresh_token" not in tokens:
+        try:
+            from app.core.security import decrypt_secret
+            old_tokens = json.loads(decrypt_secret(conn.encrypted_tokens))
+            if old_tokens.get("refresh_token"):
+                tokens["refresh_token"] = old_tokens["refresh_token"]
+        except Exception:
+            pass
+
+    encrypted_payload = encrypt_secret(json.dumps(tokens))
 
     if not conn:
         conn = GoogleAccountConnection(
@@ -168,7 +181,7 @@ async def get_google_connection_status(
         GoogleAccountConnection.user_id == current_user.id,
     )
     res_user = await db.execute(query_user)
-    conn = res_user.scalar_one_or_none()
+    conn = res_user.scalars().first()
     if conn:
         return conn
 

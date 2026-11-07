@@ -188,3 +188,133 @@ async def test_multi_user_email_connections_in_same_household(client: AsyncClien
     assert conns_after[0]["google_email"] == "user1.personal@gmail.com"
 
 
+@pytest.mark.asyncio
+async def test_authorize_url_includes_select_account_and_login_hint(client: AsyncClient):
+    user_res = await client.post("/api/v1/auth/register", json={
+        "email": "carlos.multi@ejemplo.com",
+        "password": "PasswordCarlos123!",
+        "full_name": "Carlos Multi",
+        "registration_token": "TEST-TOKEN-1234",
+    })
+    token = user_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    h_res = await client.get("/api/v1/households", headers=headers)
+    household_id = h_res.json()[0]["id"]
+
+    # 1. Authorize URL with login_hint
+    auth_url_res = await client.get(
+        f"/api/v1/integrations/google/authorize-url?household_id={household_id}&login_hint=carlos.cuenta2@gmail.com",
+        headers=headers,
+    )
+    assert auth_url_res.status_code == 200
+    url = auth_url_res.json()["authorization_url"]
+
+    import urllib.parse
+    parsed = urllib.parse.urlparse(url)
+    params = urllib.parse.parse_qs(parsed.query)
+
+    # Must contain prompt with both select_account and consent
+    prompt_val = params.get("prompt", [""])[0]
+    assert "select_account" in prompt_val
+    assert "consent" in prompt_val
+
+    # Must contain login_hint
+    assert params.get("login_hint", [""])[0] == "carlos.cuenta2@gmail.com"
+    assert params.get("access_type", [""])[0] == "offline"
+
+
+@pytest.mark.asyncio
+async def test_single_user_multiple_connections_no_status_crash(client: AsyncClient):
+    """Verifies that a single user connecting multiple email accounts to one household does not crash /status."""
+    user_res = await client.post("/api/v1/auth/register", json={
+        "email": "multi.accounts.user@ejemplo.com",
+        "password": "PasswordMulti123!",
+        "full_name": "Multi Accounts User",
+        "registration_token": "TEST-TOKEN-1234",
+    })
+    token = user_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    h_res = await client.get("/api/v1/households", headers=headers)
+    household_id = h_res.json()[0]["id"]
+
+    # Connect Account 1
+    c1 = await client.post(
+        f"/api/v1/integrations/google/connect-mock?household_id={household_id}&email=cuenta1@gmail.com",
+        headers=headers,
+    )
+    assert c1.status_code == 200
+
+    # Connect Account 2 for the SAME user in the same household
+    c2 = await client.post(
+        f"/api/v1/integrations/google/connect-mock?household_id={household_id}&email=cuenta2@gmail.com",
+        headers=headers,
+    )
+    assert c2.status_code == 200
+
+    # GET /status should not crash with MultipleResultsFound (500)
+    status_res = await client.get(
+        f"/api/v1/integrations/google/status?household_id={household_id}",
+        headers=headers,
+    )
+    assert status_res.status_code == 200
+    status_data = status_res.json()
+    assert status_data is not None
+    assert status_data["google_email"] in ["cuenta1@gmail.com", "cuenta2@gmail.com"]
+
+
+@pytest.mark.asyncio
+async def test_token_refresh_rotation_and_invalid_grant_handling(monkeypatch):
+    from app.domains.integrations.client import GoogleOAuthClient, GoogleTokenRevokedOrExpiredError
+
+    initial_tokens = {
+        "access_token": "old_access_token",
+        "refresh_token": "original_refresh_token",
+        "expires_at": 1000.0,  # Expired
+    }
+    enc = encrypt_secret(json.dumps(initial_tokens))
+
+    # Test 1: Successful refresh with new rotated refresh_token from Google
+    class MockResponse200:
+        status_code = 200
+        def json(self):
+            return {
+                "access_token": "new_rotated_access",
+                "refresh_token": "brand_new_rotated_refresh",
+                "expires_in": 3600,
+            }
+
+    async def mock_post_success(*args, **kwargs):
+        return MockResponse200()
+
+    import httpx
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_success)
+
+    new_access, new_enc = await GoogleOAuthClient.get_valid_access_token(
+        enc, client_id="test_id", client_secret="test_secret"
+    )
+    assert new_access == "new_rotated_access"
+
+    saved_tokens = json.loads(decrypt_secret(new_enc))
+    assert saved_tokens["access_token"] == "new_rotated_access"
+    assert saved_tokens["refresh_token"] == "brand_new_rotated_refresh"
+
+    # Test 2: Invalid grant response raises GoogleTokenRevokedOrExpiredError
+    class MockResponse400:
+        status_code = 400
+        text = '{"error": "invalid_grant", "error_description": "Token has been expired or revoked."}'
+
+    async def mock_post_fail(*args, **kwargs):
+        return MockResponse400()
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_fail)
+
+    with pytest.raises(GoogleTokenRevokedOrExpiredError) as exc_info:
+        await GoogleOAuthClient.get_valid_access_token(
+            enc, client_id="test_id", client_secret="test_secret"
+        )
+    assert "caducado o ha sido revocado" in str(exc_info.value)
+
+
+

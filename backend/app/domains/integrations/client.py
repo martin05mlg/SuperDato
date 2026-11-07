@@ -22,6 +22,11 @@ GMAIL_SCOPES = [
 MERCADONA_GMAIL_QUERY = "(from:mercadona OR from:mail.mercadona.com OR subject:mercadona) has:attachment filename:pdf"
 
 
+class GoogleTokenRevokedOrExpiredError(ValueError):
+    """Raised when a Google OAuth refresh token has expired or been revoked (invalid_grant)."""
+    pass
+
+
 class GoogleOAuthClient:
     @staticmethod
     def get_authorization_url(
@@ -29,8 +34,9 @@ class GoogleOAuthClient:
         household_id: str,
         client_id: Optional[str] = None,
         redirect_uri: Optional[str] = None,
+        login_hint: Optional[str] = None,
     ) -> str:
-        """Generates Google OAuth 2.0 consent screen URL with cryptographically signed JWT state."""
+        """Generates Google OAuth 2.0 consent screen URL with cryptographically signed JWT state and account selection."""
         now = datetime.now(timezone.utc)
         state_payload = {
             "u": user_id,
@@ -54,9 +60,14 @@ class GoogleOAuthClient:
             "response_type": "code",
             "scope": " ".join(GMAIL_SCOPES),
             "access_type": "offline",
-            "prompt": "consent",
+            # prompt "select_account consent" forces Google to present the account picker
+            # (allowing multiple Google accounts to be chosen) AND ensures a refresh_token is returned
+            "prompt": "select_account consent",
             "state": state_str,
         }
+        if login_hint:
+            params["login_hint"] = login_hint.strip()
+
         return f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}"
 
     @staticmethod
@@ -143,9 +154,10 @@ class GoogleOAuthClient:
 
         # If we need to refresh, ensure we have a refresh_token
         if not refresh_token:
-            if access_token:
-                return access_token, encrypted_tokens_str
-            raise ValueError("No existe refresh_token almacenado para esta cuenta de Google.")
+            raise GoogleTokenRevokedOrExpiredError(
+                "No existe refresh_token almacenado para esta cuenta de Google. "
+                "Vuelve a vincular la cuenta desde el panel de Importaciones."
+            )
 
         effective_client_id = client_id or settings.GOOGLE_CLIENT_ID
         effective_client_secret = client_secret or settings.GOOGLE_CLIENT_SECRET
@@ -168,13 +180,27 @@ class GoogleOAuthClient:
             )
 
             if response.status_code != 200:
-                raise ValueError(f"Fallo al renovar token de Google ({response.status_code}): {response.text}")
+                res_text = response.text
+                if (
+                    "invalid_grant" in res_text.lower()
+                    or "revoked" in res_text.lower()
+                    or "expired" in res_text.lower()
+                ):
+                    raise GoogleTokenRevokedOrExpiredError(
+                        "El token de Google ha caducado o ha sido revocado (invalid_grant). "
+                        "Si tu app de Google Cloud está en estado 'Testing', los tokens caducan a los 7 días. "
+                        "Pasa la pantalla de consentimiento a 'En producción' o vuelve a vincular la cuenta."
+                    )
+                raise ValueError(f"Fallo al renovar token de Google ({response.status_code}): {res_text}")
 
             new_tokens = response.json()
             tokens["access_token"] = new_tokens["access_token"]
             expires_in = new_tokens.get("expires_in", 3600)
             tokens["expires_in"] = expires_in
             tokens["expires_at"] = now_ts + expires_in
+            # If Google rotated the refresh token, update it immediately to prevent invalid_grant on next refresh
+            if "refresh_token" in new_tokens and new_tokens["refresh_token"]:
+                tokens["refresh_token"] = new_tokens["refresh_token"]
 
             updated_encrypted = encrypt_secret(json.dumps(tokens))
             return new_tokens["access_token"], updated_encrypted

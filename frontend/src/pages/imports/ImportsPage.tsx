@@ -43,10 +43,10 @@ export const ImportsPage: React.FC = () => {
     enabled: !!activeHousehold,
   });
 
-  const handleConnectRealGoogle = async () => {
+  const handleConnectRealGoogle = async (loginHint?: string) => {
     if (!activeHousehold) return;
     try {
-      const authUrl = await integrationsApi.getGoogleAuthUrl(activeHousehold.id);
+      const authUrl = await integrationsApi.getGoogleAuthUrl(activeHousehold.id, loginHint);
       window.location.href = authUrl;
     } catch {
       alert('Error al generar la URL de autorización de Google. Verifica que la API esté activa.');
@@ -185,62 +185,96 @@ export const ImportsPage: React.FC = () => {
             <span>Consultando cuentas vinculadas...</span>
           </div>
         ) : googleConnections.length > 0 ? (
-          <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
-            {googleConnections.map((conn) => {
-              const isOwnAccount = user?.id === conn.user_id;
-              return (
-                <div
-                  key={conn.id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 bg-slate-50/50 hover:bg-slate-50 transition"
-                >
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-slate-800 text-sm">{conn.google_email}</span>
-                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                        <span>AES-256</span>
-                      </span>
-                      {conn.user_full_name && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200/80 text-slate-700">
-                          <UserIcon className="w-3 h-3 text-slate-500" />
-                          <span>
-                            {conn.user_full_name} {isOwnAccount ? '(Tú)' : ''}
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                      <span>
-                        Última sincronización:{' '}
-                        {conn.last_sync_at
-                          ? conn.last_sync_at.replace('T', ' ').substring(0, 19)
-                          : 'Pendiente de escaneo'}
-                      </span>
-                      {conn.sync_status === 'ERROR' && conn.last_error && (
-                        <span className="text-rose-600 font-medium">Error: {conn.last_error}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
-                    <button
-                      onClick={() => handleManualSync(conn.id)}
-                      disabled={isSyncing}
-                      className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-lg transition disabled:opacity-50"
-                    >
-                      Escanear
-                    </button>
-                    <button
-                      onClick={() => handleDisconnectGoogle(conn.id, conn.google_email)}
-                      className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg transition"
-                      title="Desconectar esta cuenta del hogar"
-                    >
-                      Desconectar
-                    </button>
-                  </div>
+          <div className="space-y-3">
+            {googleConnections.some((c) => c.sync_status === 'NEEDS_REAUTH') && (
+              <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold">Una o más cuentas requieren reautorización</div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Google ha revocado o caducado el token. Si tu proyecto en Google Cloud Console está en estado <strong>&quot;Testing&quot; (En pruebas)</strong>, Google caduca automáticamente los tokens cada 7 días. Haz clic en <strong>Reconectar</strong> en la cuenta afectada para reanudar la sincronización. Para que no caduquen nunca, publica la app en Google Cloud Console (Pantalla de consentimiento OAuth &rarr; <em>Publicar aplicación</em>).
+                  </p>
                 </div>
-              );
-            })}
+              </div>
+            )}
+
+            <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
+              {googleConnections.map((conn) => {
+                const isOwnAccount = user?.id === conn.user_id;
+                const needsReauth = conn.sync_status === 'NEEDS_REAUTH';
+
+                return (
+                  <div
+                    key={conn.id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 bg-slate-50/50 hover:bg-slate-50 transition"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-800 text-sm">{conn.google_email}</span>
+                        {needsReauth ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                            <span>Requiere Reautorización</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                            <span>AES-256</span>
+                          </span>
+                        )}
+                        {conn.user_full_name && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200/80 text-slate-700">
+                            <UserIcon className="w-3 h-3 text-slate-500" />
+                            <span>
+                              {conn.user_full_name} {isOwnAccount ? '(Tú)' : ''}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        <span>
+                          Última sincronización:{' '}
+                          {conn.last_sync_at
+                            ? conn.last_sync_at.replace('T', ' ').substring(0, 19)
+                            : 'Pendiente de escaneo'}
+                        </span>
+                        {(conn.sync_status === 'ERROR' || conn.sync_status === 'NEEDS_REAUTH') && conn.last_error && (
+                          <span className="text-rose-600 font-medium">Error: {conn.last_error}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                      {needsReauth ? (
+                        <button
+                          onClick={() => handleConnectRealGoogle(conn.google_email)}
+                          className="text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-xs"
+                          title="Volver a autorizar esta cuenta en Google"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Reconectar</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleManualSync(conn.id)}
+                          disabled={isSyncing}
+                          className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-lg transition disabled:opacity-50"
+                        >
+                          Escanear
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDisconnectGoogle(conn.id, conn.google_email)}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg transition"
+                        title="Desconectar esta cuenta del hogar"
+                      >
+                        Desconectar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/40">
@@ -391,14 +425,14 @@ export const ImportsPage: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Redirige a la pantalla de consentimiento de Google para autorizar lectura exclusiva de correos con tickets digitales de Mercadona.
+                  Redirige a Google para seleccionar qué cuenta de Gmail deseas vincular y autorizar la lectura de tickets de Mercadona. Puedes vincular múltiples cuentas al mismo hogar repitiendo este paso.
                 </p>
                 <button
-                  onClick={handleConnectRealGoogle}
+                  onClick={() => handleConnectRealGoogle()}
                   className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Ir a Autorizar en Google</span>
+                  <span>Ir a Seleccionar y Autorizar Cuenta en Google</span>
                 </button>
               </div>
 
